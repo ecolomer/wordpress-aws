@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   wordpress:
-    build: .
+    build: ../service
     image: wordpress:local
     restart: always
     ports:
