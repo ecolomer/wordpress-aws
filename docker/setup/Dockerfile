@@ -1,6 +1,6 @@
-FROM ubuntu:latest
+FROM alpine:latest
 
-RUN apt-get update && apt-get install -y mysql-client
+RUN apk update && apk add bash && apk add mysql-client && rm -f /var/cache/apk/*
 
 COPY entrypoint.sh /usr/bin/
 RUN chmod +x /usr/bin/entrypoint.sh
