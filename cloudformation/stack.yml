@@ -34,6 +34,7 @@ Metadata:
           - 'DatabaseName'
           - 'DatabaseMasterUser'
           - 'DatabaseMasterPassword'
+          - 'DatabaseInitPassword'
           - 'DatabaseWpUser'
           - 'DatabaseWpPassword'
     ParameterLabels:
@@ -69,6 +70,8 @@ Metadata:
         default: 'Database master user'
       DatabaseMasterPassword:
         default: 'Database master password'
+      DatabaseInitPassword:
+        default: 'Database initial password'
       DatabaseWpUser:
         default: 'Database WordPress user'
       DatabaseWpPassword:
@@ -148,12 +151,17 @@ Parameters:
     Default: 'wordpress'
 
   DatabaseMasterUser:
-    Description: 'Database master username for the administrative account'
+    Description: 'Database master username for the RDS administrative account'
     Type: 'String'
     Default: 'admin'
 
   DatabaseMasterPassword:
-    Description: 'Database master password for the administrative account. Must be at least 8 characters containing letters, numbers, and symbols.'
+    Description: 'AWS SSM Parameter name containing the database password for the RDS administrative account. This key is used to inject secrets inside the WordPress service container.'
+    Type: 'AWS::SSM::Parameter::Name'
+    Default: '/database/masterpassword'
+
+  DatabaseInitPassword:
+    Description: 'Database initial password for the RDS administrative account. Must match the one stored in AWS SSM Parameter Store.'
     Type: 'String'
     AllowedPattern: '(?=^.{6,255}$)((?=.*\d)(?=.*[A-Z])(?=.*[a-z])|(?=.*\d)(?=.*[^A-Za-z0-9])(?=.*[a-z])|(?=.*[^A-Za-z0-9])(?=.*[A-Z])(?=.*[a-z])|(?=.*\d)(?=.*[A-Z])(?=.*[^A-Za-z0-9]))^.*'
     ConstraintDescription: 'Invalid password. Must be at least 8 characters containing letters, numbers, and symbols.'
@@ -165,11 +173,9 @@ Parameters:
     Default: 'wordpress'
 
   DatabaseWpPassword:
-    Description: 'Database password for the WordPress service. Must be at least 8 characters containing letters, numbers, and symbols.'
-    Type: 'String'
-    AllowedPattern: '(?=^.{6,255}$)((?=.*\d)(?=.*[A-Z])(?=.*[a-z])|(?=.*\d)(?=.*[^A-Za-z0-9])(?=.*[a-z])|(?=.*[^A-Za-z0-9])(?=.*[A-Z])(?=.*[a-z])|(?=.*\d)(?=.*[A-Z])(?=.*[^A-Za-z0-9]))^.*'
-    ConstraintDescription: 'Invalid password. Must be at least 8 characters containing letters, numbers, and symbols.'
-    NoEcho: true
+    Description: 'AWS SSM Parameter name containing the database password for the WordPress service. This key is used to inject secrets inside the WordPress service container.'
+    Type: 'AWS::SSM::Parameter::Name'
+    Default: '/database/wppassword'
 
 Resources:
 
@@ -198,14 +204,15 @@ Resources:
               Value: !GetAtt 'DatabaseCluster.Endpoint.Address'
             - Name: 'DB_USER'
               Value: !Ref 'DatabaseMasterUser'
-            - Name: 'DB_PASSWORD'
-              Value: !Ref 'DatabaseMasterPassword'
             - Name: 'WP_DATABASE'
               Value: !Ref 'DatabaseName'
             - Name: 'WP_USER'
               Value: !Ref 'DatabaseWpUser'
+          Secrets:
+            - Name: 'DB_PASSWORD'
+              ValueFrom: !Ref 'DatabaseMasterPassword'
             - Name: 'WP_PASSWORD'
-              Value: !Ref 'DatabaseWpPassword'
+              ValueFrom: !Ref 'DatabaseWpPassword'
         - Name: 'wordpress-service'
           Essential: true
           Image: !Ref 'WordPressImage'
@@ -228,13 +235,14 @@ Resources:
               Value: !Ref 'DatabaseName'
             - Name: 'WORDPRESS_DB_USER'
               Value: !Ref 'DatabaseWpUser'
-            - Name: 'WORDPRESS_DB_PASSWORD'
-              Value: !Ref 'DatabaseWpPassword'
             - Name: 'WORDPRESS_CONFIG_EXTRA'
               Value: !Sub |
                   define('WP_HOME', 'http://${SiteDomain}');
                   define('WP_SITEURL', 'http://${SiteDomain}');
                   define('FS_METHOD', 'direct');
+          Secrets:
+            - Name: 'WORDPRESS_DB_PASSWORD'
+              ValueFrom: !Ref 'DatabaseWpPassword'
           PortMappings:
             - ContainerPort: !Ref 'TaskPort'
       Volumes:
@@ -258,6 +266,15 @@ Resources:
                 - 'ecs-tasks.amazonaws.com'
             Action:
               - 'sts:AssumeRole'
+      Policies:
+        - PolicyName: 'SSMParametersPolicy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action:
+                  - 'ssm:GetParameter*'
+                Resource: '*'
       ManagedPolicyArns:
         - 'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy'
       Tags:
@@ -456,7 +473,7 @@ Resources:
       Engine: 'aurora-mysql'
       EngineVersion: '5.7.12'
       MasterUsername: !Ref 'DatabaseMasterUser'
-      MasterUserPassword: !Ref 'DatabaseMasterPassword'
+      MasterUserPassword: !Ref 'DatabaseInitPassword'
       DeletionProtection: true
       DBClusterParameterGroupName: !Ref 'DatabaseParameters'
       DBSubnetGroupName: !Ref 'DatabaseSubnets'
