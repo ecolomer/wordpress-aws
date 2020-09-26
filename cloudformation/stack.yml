@@ -363,7 +363,7 @@ Resources:
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 3
       Matcher:
-        HttpCode: 200-299
+        HttpCode: 200-399
       Tags:
         - Key: 'Name'
           Value: !Sub '${BaseName}-service'
