@@ -15,7 +15,8 @@ Metadata:
       - Label:
           default: 'Container configuration'
         Parameters:
-          - 'TaskImage'
+          - 'SetupImage'
+          - 'WordPressImage'
           - 'TaskPort'
           - 'TaskCpu'
           - 'TaskMemory'
@@ -31,8 +32,10 @@ Metadata:
         Parameters:
           - 'DatabaseClass'
           - 'DatabaseName'
-          - 'DatabaseUser'
-          - 'DatabasePassword'
+          - 'DatabaseMasterUser'
+          - 'DatabaseMasterPassword'
+          - 'DatabaseWpUser'
+          - 'DatabaseWpPassword'
     ParameterLabels:
       BaseName:
         default: 'Base resource name'
@@ -40,8 +43,10 @@ Metadata:
         default: 'Environment'
       SiteDomain:
         default: 'Site Domain'
-      TaskImage:
-        default: 'Container image repository URL'
+      SetupImage:
+        default: 'WordPress setup container image repository URL'
+      WordPressImage:
+        default: 'WordPress service container image repository URL'
       TaskPort:
         default: 'Container port'
       TaskCpu:
@@ -60,10 +65,14 @@ Metadata:
         default: 'Database Instance Class'
       DatabaseName:
         default: 'Database Name'
-      DatabaseUser:
-        default: 'Database Master User'
-      DatabasePassword:
-        default: 'Database Master Password'
+      DatabaseMasterUser:
+        default: 'Database master user'
+      DatabaseMasterPassword:
+        default: 'Database master password'
+      DatabaseWpUser:
+        default: 'Database WordPress user'
+      DatabaseWpPassword:
+        default: 'Database WordPress password'
 
 Parameters:
 
@@ -87,8 +96,12 @@ Parameters:
     Type: 'String'
     Default: 'blog.wordpress.local'
 
-  TaskImage:
-    Description: 'Docker image repository URL (<registry-dns-name>/<repository>)'
+  SetupImage:
+    Description: 'Docker setup image repository URL (<registry-dns-name>/<repository>)'
+    Type: 'String'
+
+  WordPressImage:
+    Description: 'Docker service image repository URL (<registry-dns-name>/<repository>)'
     Type: 'String'
 
   TaskPort:
@@ -134,13 +147,25 @@ Parameters:
     Type: 'String'
     Default: 'wordpress'
 
-  DatabaseUser:
-    Description: 'Database master user for the administrative account'
+  DatabaseMasterUser:
+    Description: 'Database master username for the administrative account'
+    Type: 'String'
+    Default: 'admin'
+
+  DatabaseMasterPassword:
+    Description: 'Database master password for the administrative account. Must be at least 8 characters containing letters, numbers, and symbols.'
+    Type: 'String'
+    AllowedPattern: '(?=^.{6,255}$)((?=.*\d)(?=.*[A-Z])(?=.*[a-z])|(?=.*\d)(?=.*[^A-Za-z0-9])(?=.*[a-z])|(?=.*[^A-Za-z0-9])(?=.*[A-Z])(?=.*[a-z])|(?=.*\d)(?=.*[A-Z])(?=.*[^A-Za-z0-9]))^.*'
+    ConstraintDescription: 'Invalid password. Must be at least 8 characters containing letters, numbers, and symbols.'
+    NoEcho: true
+
+  DatabaseWpUser:
+    Description: 'Database username for the WordPress service'
     Type: 'String'
     Default: 'wordpress'
 
-  DatabasePassword:
-    Description: 'Database master password for the administrative account. Must be at least 8 characters containing letters, numbers, and symbols.'
+  DatabaseWpPassword:
+    Description: 'Database password for the WordPress service. Must be at least 8 characters containing letters, numbers, and symbols.'
     Type: 'String'
     AllowedPattern: '(?=^.{6,255}$)((?=.*\d)(?=.*[A-Z])(?=.*[a-z])|(?=.*\d)(?=.*[^A-Za-z0-9])(?=.*[a-z])|(?=.*[^A-Za-z0-9])(?=.*[A-Z])(?=.*[a-z])|(?=.*\d)(?=.*[A-Z])(?=.*[^A-Za-z0-9]))^.*'
     ConstraintDescription: 'Invalid password. Must be at least 8 characters containing letters, numbers, and symbols.'
@@ -159,9 +184,34 @@ Resources:
       Memory: !Ref 'TaskMemory'
       ExecutionRoleArn: !GetAtt 'TaskExecutionRole.Arn'
       ContainerDefinitions:
+        - Name: 'wordpress-setup'
+          Essential: false
+          Image: !Ref 'SetupImage'
+          LogConfiguration:
+            LogDriver: 'awslogs'
+            Options:
+              awslogs-group: !Ref 'CloudWatchLogsGroup'
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: 'wordpress-setup'
+          Environment:
+            - Name: 'DB_HOST'
+              Value: !GetAtt 'DatabaseCluster.Endpoint.Address'
+            - Name: 'DB_USER'
+              Value: !Ref 'DatabaseMasterUser'
+            - Name: 'DB_PASSWORD'
+              Value: !Ref 'DatabaseMasterPassword'
+            - Name: 'WP_DATABASE'
+              Value: !Ref 'DatabaseName'
+            - Name: 'WP_USER'
+              Value: !Ref 'DatabaseWpUser'
+            - Name: 'WP_PASSWORD'
+              Value: !Ref 'DatabaseWpPassword'
         - Name: 'wordpress-service'
           Essential: true
-          Image: !Ref 'TaskImage'
+          Image: !Ref 'WordPressImage'
+          DependsOn:
+            - Condition: 'SUCCESS'
+              ContainerName: 'wordpress-setup'
           LogConfiguration:
             LogDriver: 'awslogs'
             Options:
@@ -177,9 +227,9 @@ Resources:
             - Name: 'WORDPRESS_DB_NAME'
               Value: !Ref 'DatabaseName'
             - Name: 'WORDPRESS_DB_USER'
-              Value: !Ref 'DatabaseUser'
+              Value: !Ref 'DatabaseWpUser'
             - Name: 'WORDPRESS_DB_PASSWORD'
-              Value: !Ref 'DatabasePassword'
+              Value: !Ref 'DatabaseWpPassword'
             - Name: 'WORDPRESS_CONFIG_EXTRA'
               Value: !Sub |
                   define('WP_HOME', 'http://${SiteDomain}');
@@ -405,8 +455,8 @@ Resources:
       DBClusterIdentifier: !Sub '${BaseName}-mysql-cluster'
       Engine: 'aurora-mysql'
       EngineVersion: '5.7.12'
-      MasterUsername: !Ref 'DatabaseUser'
-      MasterUserPassword: !Ref 'DatabasePassword'
+      MasterUsername: !Ref 'DatabaseMasterUser'
+      MasterUserPassword: !Ref 'DatabaseMasterPassword'
       DeletionProtection: true
       DBClusterParameterGroupName: !Ref 'DatabaseParameters'
       DBSubnetGroupName: !Ref 'DatabaseSubnets'
