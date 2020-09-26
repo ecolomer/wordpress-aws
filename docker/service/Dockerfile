@@ -1,8 +1,5 @@
 FROM wordpress:latest
 
-# Setup netcat for network connectivity check
-RUN apt-get update && apt-get install -y netcat-openbsd
-
 # Setup custom entrypoint script
 COPY entrypoint.sh /usr/bin/
 RUN chmod +x /usr/bin/entrypoint.sh
