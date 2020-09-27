@@ -1,0 +1,223 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AWS Aurora MySQL'
+
+Metadata:
+
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'General configuration'
+        Parameters:
+          - 'BaseName'
+          - 'Environment'
+      - Label:
+          default: 'Network configuration'
+        Parameters:
+          - 'VpcId'
+          - 'Subnets'
+      - Label:
+          default: 'Database configuration'
+        Parameters:
+          - 'DatabaseClass'
+          - 'DatabaseMasterUser'
+          - 'DatabaseMasterPassword'
+      - Label:
+          default: 'SSM configuration'
+        Parameters:
+          - 'SsmKeyPrefix'
+    ParameterLabels:
+      BaseName:
+        default: 'Base resource name'
+      Environment:
+        default: 'Environment'
+      VpcId:
+        default: 'VPC Identifier'
+      Subnets:
+        default: 'VPC Subnets'
+      DatabaseClass:
+        default: 'Database Instance Class'
+      DatabaseMasterUser:
+        default: 'Database Master User'
+      DatabaseMasterPassword:
+        default: 'Database Master Password'
+      SsmKeyPrefix:
+        default: 'Key prefix'
+
+Parameters:
+
+  BaseName:
+    Description: 'This name will be used to build identifiers for the components in the stack'
+    Type: 'String'
+    AllowedPattern: '[-_a-z0-9]+'
+    ConstraintDescription: 'Invalid name. Only lowercase letters, numbers, underscores and hyphens are allowed.'
+    Default: 'aurora-mysql'
+
+  Environment:
+    Description: 'Stack environment name'
+    Type: 'String'
+    AllowedValues:
+      - 'Pro'
+      - 'Pre'
+    Default: 'Pro'
+
+  VpcId:
+    Description: 'AWS SSM Parameter name storing the VPC identifier'
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::VPC::Id>'
+    Default: '/network/vpc-id'
+
+  Subnets:
+    Description: 'AWS SSM Parameter name storing subnets for database subnet group'
+    Type: 'AWS::SSM::Parameter::Value<List<AWS::EC2::Subnet::Id>>'
+    Default: '/network/subnets'
+
+  DatabaseClass:
+    Description: 'RDS instance class. Must be a valid db.xx.xxxx class.'
+    Type: 'String'
+    AllowedPattern: 'db\..*'
+    ConstraintDescription: 'Invalid class. Must be a valid db.xx.xxxx class.'
+    Default: 'db.t3.small'
+
+  DatabaseMasterUser:
+    Description: 'AWS SSM Parameter name containing the database username for the RDS administrative account'
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: '/database/masteruser'
+
+  DatabaseMasterPassword:
+    Description: 'Database master password for the RDS administrative account. Must be at least 8 characters containing letters, numbers, and symbols.'
+    Type: 'String'
+    AllowedPattern: '(?=^.{6,255}$)((?=.*\d)(?=.*[A-Z])(?=.*[a-z])|(?=.*\d)(?=.*[^A-Za-z0-9])(?=.*[a-z])|(?=.*[^A-Za-z0-9])(?=.*[A-Z])(?=.*[a-z])|(?=.*\d)(?=.*[A-Z])(?=.*[^A-Za-z0-9]))^.*'
+    ConstraintDescription: 'Invalid password. Must be at least 8 characters containing letters, numbers, and symbols.'
+    NoEcho: true
+
+  SsmKeyPrefix:
+    Description: 'Key prefix for AWS Systems Manager Parameters created in this stack'
+    Type: 'String'
+    Default: '/database'
+
+Resources:
+
+  SubnetGroup:
+    Type: 'AWS::RDS::DBSubnetGroup'
+    Properties:
+      DBSubnetGroupDescription: !Sub 'Database subnet group for ${AWS::StackName}'
+      DBSubnetGroupName: !Ref 'BaseName'
+      SubnetIds: !Ref 'Subnets'
+      Tags:
+        - Key: 'Name'
+          Value: !Ref 'BaseName'
+        - Key: 'Env'
+          Value: !Ref 'Environment'
+
+  ParameterGroup:
+    Type: 'AWS::RDS::DBClusterParameterGroup'
+    Properties:
+      Description: !Sub 'Database parameter group for ${AWS::StackName}'
+      Family: 'aurora-mysql5.7'
+      Parameters:
+        time_zone: 'Europe/Paris'
+      Tags:
+        - Key: 'Name'
+          Value: !Ref 'BaseName'
+        - Key: 'Env'
+          Value: !Ref 'Environment'
+
+  DatabaseCluster:
+    Type: 'AWS::RDS::DBCluster'
+    Properties:
+      DBClusterIdentifier: !Sub '${BaseName}-cluster'
+      Engine: 'aurora-mysql'
+      EngineVersion: '5.7.12'
+      MasterUsername: !Ref 'DatabaseMasterUser'
+      MasterUserPassword: !Ref 'DatabaseMasterPassword'
+      DeletionProtection: true
+      DBClusterParameterGroupName: !Ref 'ParameterGroup'
+      DBSubnetGroupName: !Ref 'SubnetGroup'
+      VpcSecurityGroupIds:
+        - !Ref 'SecurityGroup'
+      EnableCloudwatchLogsExports:
+        - 'general'
+        - 'error'
+        - 'slowquery'
+      Tags:
+        - Key: 'Name'
+          Value: !Ref 'BaseName'
+        - Key: 'Env'
+          Value: !Ref 'Environment'
+
+  DatabaseInstance1:
+    Type: 'AWS::RDS::DBInstance'
+    Properties:
+      DBClusterIdentifier: !Ref 'DatabaseCluster'
+      DBInstanceIdentifier: !Sub '${BaseName}-instance1'
+      DBInstanceClass: !Ref 'DatabaseClass'
+      Engine: 'aurora-mysql'
+      Tags:
+        - Key: 'Name'
+          Value: !Sub '${BaseName}-instance1'
+        - Key: 'Env'
+          Value: !Ref 'Environment'
+
+  SecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: 'Enable access to database'
+      VpcId: !Ref 'VpcId'
+      Tags:
+        - Key: 'Name'
+          Value: !Sub '${BaseName}-db'
+        - Key: 'Env'
+          Value: !Ref 'Environment'
+
+  SsmWriterEndpoint:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '${SsmKeyPrefix}/writer-endpoint'
+      Type: String
+      Value: !GetAtt 'DatabaseCluster.Endpoint.Address'
+      Description: !Sub '${AWS::StackName} - Database writer endpoint'
+      Tags:
+        Name: !Sub '${BaseName}-writerendpoint'
+        Env: !Ref 'Environment'
+
+  SsmReaderEndpoint:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '${SsmKeyPrefix}/reader-endpoint'
+      Type: String
+      Value: !GetAtt 'DatabaseCluster.ReadEndpoint.Address'
+      Description: !Sub '${AWS::StackName} - Database reader endpoint'
+      Tags:
+        Name: !Sub '${BaseName}-readerendpoint'
+        Env: !Ref 'Environment'
+
+  SsmSecurityGroup:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '${SsmKeyPrefix}/security-group'
+      Type: String
+      Value: !Ref 'SecurityGroup'
+      Description: !Sub '${AWS::StackName} - Security group'
+      Tags:
+        Name: !Sub '${BaseName}-securitygroup'
+        Env: !Ref 'Environment'
+
+Outputs:
+
+  WriterEndpoint:
+    Description: 'Database writer endpoint'
+    Value: !GetAtt 'DatabaseCluster.Endpoint.Address'
+    Export:
+      Name: !Sub '${AWS::StackName}-WriterEndpoint'
+
+  ReaderEndpoint:
+    Description: 'Database reader endpoint'
+    Value: !GetAtt 'DatabaseCluster.ReadEndpoint.Address'
+    Export:
+      Name: !Sub '${AWS::StackName}-ReaderEndpoint'
+
+  SecurityGroup:
+    Description: 'Security group for database cluster'
+    Value: !Ref 'SecurityGroup'
+    Export:
+      Name: !Sub '${AWS::StackName}-SecurityGroup'

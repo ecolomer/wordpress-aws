@@ -1,6 +1,6 @@
 ---
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'WordPress Scalable Setup'
+Description: 'AWS WordPress ECS/Fargate'
 
 Metadata:
 
@@ -13,30 +13,38 @@ Metadata:
           - 'Environment'
           - 'SiteDomain'
       - Label:
+          default: 'Network configuration'
+        Parameters:
+          - 'VpcId'
+          - 'Subnets'
+      - Label:
+          default: 'Load Balancer configuration'
+        Parameters:
+          - 'ListenerArn'
+          - 'LoadBalancerSG'
+      - Label:
           default: 'Container configuration'
         Parameters:
           - 'SetupImage'
           - 'WordPressImage'
-          - 'TaskPort'
           - 'TaskCpu'
           - 'TaskMemory'
           - 'TaskCount'
       - Label:
-          default: 'Network configuration'
-        Parameters:
-          - 'VpcId'
-          - 'SubnetA'
-          - 'SubnetB'
-      - Label:
           default: 'Database configuration'
         Parameters:
-          - 'DatabaseClass'
+          - 'DatabaseHost'
+          - 'DatabaseSG'
           - 'DatabaseName'
           - 'DatabaseMasterUser'
           - 'DatabaseMasterPassword'
-          - 'DatabaseInitPassword'
           - 'DatabaseWpUser'
           - 'DatabaseWpPassword'
+      - Label:
+          default: 'EFS configuration'
+        Parameters:
+          - 'FileSystemId'
+          - 'FileSystemSG'
     ParameterLabels:
       BaseName:
         default: 'Base resource name'
@@ -44,38 +52,42 @@ Metadata:
         default: 'Environment'
       SiteDomain:
         default: 'Site Domain'
+      VpcId:
+        default: 'VPC Identifier'
+      Subnets:
+        default: 'VPC Subnets'
+      ListenerArn:
+        default: 'Listener identifier'
+      LoadBalancerSG:
+        default: 'Load Balancer security group'
       SetupImage:
         default: 'WordPress setup container image repository URL'
       WordPressImage:
         default: 'WordPress service container image repository URL'
-      TaskPort:
-        default: 'Container port'
       TaskCpu:
         default: 'Container CPU'
       TaskMemory:
         default: 'Container memory'
       TaskCount:
         default: 'Desired task count'
-      VpcId:
-        default: 'VPC Identifier'
-      SubnetA:
-        default: 'VPC Subnet A'
-      SubnetB:
-        default: 'VPC Subnet B'
-      DatabaseClass:
-        default: 'Database Instance Class'
+      DatabaseHost:
+        default: 'Database host'
+      DatabaseSG:
+        default: 'Database security group'
       DatabaseName:
-        default: 'Database Name'
+        default: 'Database name'
       DatabaseMasterUser:
         default: 'Database master user'
       DatabaseMasterPassword:
         default: 'Database master password'
-      DatabaseInitPassword:
-        default: 'Database initial password'
       DatabaseWpUser:
         default: 'Database WordPress user'
       DatabaseWpPassword:
         default: 'Database WordPress password'
+      FileSystemId:
+        default: 'FileSystem identifier'
+      FileSystemSG:
+        default: 'FileSystem security group'
 
 Parameters:
 
@@ -84,7 +96,7 @@ Parameters:
     Type: 'String'
     AllowedPattern: '[-_a-z0-9]+'
     ConstraintDescription: 'Invalid name. Only lowercase letters, numbers, underscores and hyphens are allowed.'
-    Default: 'wordpress'
+    Default: 'ecs'
 
   Environment:
     Description: 'Stack environment name'
@@ -99,18 +111,35 @@ Parameters:
     Type: 'String'
     Default: 'blog.wordpress.local'
 
+  VpcId:
+    Description: 'AWS SSM Parameter name storing the VPC identifier'
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::VPC::Id>'
+    Default: '/network/vpc-id'
+
+  Subnets:
+    Description: 'AWS SSM Parameter name storing subnets for ECS containers'
+    Type: 'AWS::SSM::Parameter::Value<List<AWS::EC2::Subnet::Id>>'
+    Default: '/network/subnets'
+
+  ListenerArn:
+    Description: 'AWS SSM Parameter name containing the load balancer listener ARN'
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: '/balancer/listener'
+
+  LoadBalancerSG:
+    Description: 'AWS SSM Parameter name containing the load balancer security group identifier'
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: '/balancer/security-group'
+
   SetupImage:
-    Description: 'Docker setup image repository URL (<registry-dns-name>/<repository>)'
-    Type: 'String'
+    Description: 'AWS SSM Parameter name containing the WordPress setup Docker image repository'
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: '/repository/wordpress-setup'
 
   WordPressImage:
-    Description: 'Docker service image repository URL (<registry-dns-name>/<repository>)'
-    Type: 'String'
-
-  TaskPort:
-    Description: 'Port number the application inside the Docker container is binding to'
-    Type: 'Number'
-    Default: 80
+    Description: 'AWS SSM Parameter name containing the WordPress service Docker image repository'
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: '/repository/wordpress-service'
 
   TaskCpu:
     Description: 'CPU assigned to the container. 1024 is 1 CPU.'
@@ -127,55 +156,50 @@ Parameters:
     Type: 'Number'
     Default: 1
 
-  VpcId:
-    Description: 'VPC identifier'
-    Type: 'AWS::EC2::VPC::Id'
+  DatabaseHost:
+    Description: 'AWS SSM Parameter name containing the database writer endpoint for the WordPress service'
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: '/database/writer-endpoint'
 
-  SubnetA:
-    Description: 'Subnet in Availability Zone A'
-    Type: 'AWS::EC2::Subnet::Id'
-
-  SubnetB:
-    Description: 'Subnet in Availability Zone A'
-    Type: 'AWS::EC2::Subnet::Id'
-
-  DatabaseClass:
-    Description: 'RDS instance class. Must be a valid db.xx.xxxx class.'
-    Type: 'String'
-    AllowedPattern: 'db\..*'
-    Default: 'db.t3.small'
+  DatabaseSG:
+    Description: 'AWS SSM Parameter name containing the database security group identifier'
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: '/database/security-group'
 
   DatabaseName:
-    Description: 'Initial database name'
-    Type: 'String'
-    Default: 'wordpress'
+    Description: 'AWS SSM Parameter name containing the WordPress service database name'
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: '/database/name'
 
   DatabaseMasterUser:
-    Description: 'Database master username for the RDS administrative account'
-    Type: 'String'
-    Default: 'admin'
+    Description: 'AWS SSM Parameter name containing the database username for the RDS administrative account'
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: '/database/masteruser'
 
   DatabaseMasterPassword:
     Description: 'AWS SSM Parameter name containing the database password for the RDS administrative account. This key is used to inject secrets inside the WordPress service container.'
     Type: 'AWS::SSM::Parameter::Name'
     Default: '/database/masterpassword'
 
-  DatabaseInitPassword:
-    Description: 'Database initial password for the RDS administrative account. Must match the one stored in AWS SSM Parameter Store.'
-    Type: 'String'
-    AllowedPattern: '(?=^.{6,255}$)((?=.*\d)(?=.*[A-Z])(?=.*[a-z])|(?=.*\d)(?=.*[^A-Za-z0-9])(?=.*[a-z])|(?=.*[^A-Za-z0-9])(?=.*[A-Z])(?=.*[a-z])|(?=.*\d)(?=.*[A-Z])(?=.*[^A-Za-z0-9]))^.*'
-    ConstraintDescription: 'Invalid password. Must be at least 8 characters containing letters, numbers, and symbols.'
-    NoEcho: true
-
   DatabaseWpUser:
-    Description: 'Database username for the WordPress service'
-    Type: 'String'
-    Default: 'wordpress'
+    Description: 'AWS SSM Parameter name containing the database username for the WordPress service'
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: '/database/wpuser'
 
   DatabaseWpPassword:
     Description: 'AWS SSM Parameter name containing the database password for the WordPress service. This key is used to inject secrets inside the WordPress service container.'
     Type: 'AWS::SSM::Parameter::Name'
     Default: '/database/wppassword'
+
+  FileSystemId:
+    Description: 'AWS SSM Parameter name containing the EFS filesystem identifier'
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: '/filesystem/filesystem-id'
+
+  FileSystemSG:
+    Description: 'AWS SSM Parameter name containing the EFS filesystem security group identifier'
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: '/filesystem/security-group'
 
 Resources:
 
@@ -201,7 +225,7 @@ Resources:
               awslogs-stream-prefix: 'wordpress-setup'
           Environment:
             - Name: 'DB_HOST'
-              Value: !GetAtt 'DatabaseCluster.Endpoint.Address'
+              Value: !Ref 'DatabaseHost'
             - Name: 'DB_USER'
               Value: !Ref 'DatabaseMasterUser'
             - Name: 'WP_DATABASE'
@@ -230,7 +254,7 @@ Resources:
               SourceVolume: 'content'
           Environment:
             - Name: 'WORDPRESS_DB_HOST'
-              Value: !GetAtt 'DatabaseCluster.Endpoint.Address'
+              Value: !Ref 'DatabaseHost'
             - Name: 'WORDPRESS_DB_NAME'
               Value: !Ref 'DatabaseName'
             - Name: 'WORDPRESS_DB_USER'
@@ -244,11 +268,11 @@ Resources:
             - Name: 'WORDPRESS_DB_PASSWORD'
               ValueFrom: !Ref 'DatabaseWpPassword'
           PortMappings:
-            - ContainerPort: !Ref 'TaskPort'
+            - ContainerPort: 80
       Volumes:
         - Name: 'content'
           EFSVolumeConfiguration:
-            FilesystemId: !Ref 'ElasticFilesystem'
+            FilesystemId: !Ref 'FileSystemId'
             AuthorizationConfig:
               AccessPointId: !Ref 'ContentAccessPoint'
             TransitEncryption: 'ENABLED'
@@ -286,7 +310,6 @@ Resources:
   TaskService:
     Type: 'AWS::ECS::Service'
     DependsOn:
-      - 'DatabaseInstance1'
       - 'ListenerRule'
     Properties:
       ServiceName: !Ref 'BaseName'
@@ -301,13 +324,11 @@ Resources:
           AssignPublicIp: 'ENABLED'
           SecurityGroups:
             - !Ref 'ServiceSG'
-          Subnets:
-            - !Ref 'SubnetA'
-            - !Ref 'SubnetB'
+          Subnets: !Ref 'Subnets'
       LoadBalancers:
         - ContainerName: 'wordpress-service'
-          ContainerPort: !Ref 'TaskPort'
-          TargetGroupArn: !Ref 'ServiceTargetGroup'
+          ContainerPort: 80
+          TargetGroupArn: !Ref 'TargetGroup'
       PropagateTags: 'SERVICE'
       Tags:
         - Key: 'Name'
@@ -347,7 +368,25 @@ Resources:
         - Key: 'Env'
           Value: !Ref 'Environment'
 
-  ServiceTargetGroup:
+  FileSystemIngress:
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Properties:
+      GroupId: !Ref 'FileSystemSG'
+      IpProtocol: tcp
+      FromPort: 2049
+      ToPort: 2049
+      SourceSecurityGroupId: !Ref 'ServiceSG'
+
+  DatabaseIngress:
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Properties:
+      GroupId: !Ref 'DatabaseSG'
+      IpProtocol: tcp
+      FromPort: 3306
+      ToPort: 3306
+      SourceSecurityGroupId: !Ref 'ServiceSG'
+
+  TargetGroup:
     Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
     Properties:
       Name: !Sub '${BaseName}-service'
@@ -373,7 +412,7 @@ Resources:
   ListenerRule:
     Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
     Properties:
-      ListenerArn: !Ref 'Listener'
+      ListenerArn: !Ref 'ListenerArn'
       Priority: 10
       Conditions:
         - Field: 'host-header'
@@ -381,157 +420,12 @@ Resources:
             - !Ref 'SiteDomain'
       Actions:
         - Type: 'forward'
-          TargetGroupArn: !Ref 'ServiceTargetGroup'
-
-  LoadBalancer:
-    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
-    Properties:
-      Name: !Ref 'BaseName'
-      Type: 'application'
-      Subnets: [ !Ref 'SubnetA', !Ref 'SubnetB' ]
-      SecurityGroups:
-        - !Ref 'LoadBalancerSG'
-      LoadBalancerAttributes:
-        - Key: 'deletion_protection.enabled'
-          Value: 'true'
-        - Key: 'routing.http2.enabled'
-          Value: 'false'
-      Tags:
-        - Key: 'Name'
-          Value: !Ref 'BaseName'
-        - Key: 'Env'
-          Value: !Ref 'Environment'
-
-  Listener:
-    Type: 'AWS::ElasticLoadBalancingV2::Listener'
-    Properties:
-      LoadBalancerArn: !Ref 'LoadBalancer'
-      Port: 80
-      Protocol: 'HTTP'
-      DefaultActions:
-        - Type: 'forward'
-          TargetGroupArn: !Ref 'DefaultTargetGroup'
-
-  DefaultTargetGroup:
-    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
-    Properties:
-      Name: !Sub '${BaseName}-default'
-      Port: 80
-      Protocol: 'HTTP'
-      VpcId: !Ref 'VpcId'
-      Tags:
-        - Key: 'Name'
-          Value: !Sub '${BaseName}-default'
-        - Key: 'Env'
-          Value: !Ref 'Environment'
-
-  LoadBalancerSG:
-    Type: 'AWS::EC2::SecurityGroup'
-    Properties:
-      GroupDescription: 'Enable access to load balancer'
-      VpcId: !Ref 'VpcId'
-      SecurityGroupIngress:
-        - IpProtocol: 'tcp'
-          FromPort: 80
-          ToPort: 80
-          CidrIp: '0.0.0.0/0'
-      Tags:
-        - Key: 'Name'
-          Value: !Sub '${BaseName}-lb'
-        - Key: 'Env'
-          Value: !Ref 'Environment'
-
-  DatabaseSubnets:
-    Type: 'AWS::RDS::DBSubnetGroup'
-    Properties:
-      DBSubnetGroupDescription: !Sub 'Database subnet group for ${AWS::StackName}'
-      DBSubnetGroupName: !Ref 'BaseName'
-      SubnetIds: [ !Ref 'SubnetA', !Ref 'SubnetB' ]
-      Tags:
-        - Key: 'Name'
-          Value: !Ref 'BaseName'
-        - Key: 'Env'
-          Value: !Ref 'Environment'
-
-  DatabaseParameters:
-    Type: 'AWS::RDS::DBClusterParameterGroup'
-    Properties:
-      Description: !Sub 'Database parameter group for ${AWS::StackName}'
-      Family: 'aurora-mysql5.7'
-      Parameters:
-        time_zone: 'Europe/Paris'
-      Tags:
-        - Key: 'Name'
-          Value: !Ref 'BaseName'
-        - Key: 'Env'
-          Value: !Ref 'Environment'
-
-  DatabaseCluster:
-    Type: 'AWS::RDS::DBCluster'
-    Properties:
-      DBClusterIdentifier: !Sub '${BaseName}-mysql-cluster'
-      Engine: 'aurora-mysql'
-      EngineVersion: '5.7.12'
-      MasterUsername: !Ref 'DatabaseMasterUser'
-      MasterUserPassword: !Ref 'DatabaseInitPassword'
-      DeletionProtection: true
-      DBClusterParameterGroupName: !Ref 'DatabaseParameters'
-      DBSubnetGroupName: !Ref 'DatabaseSubnets'
-      VpcSecurityGroupIds:
-        - !Ref 'DatabaseSG'
-      EnableCloudwatchLogsExports:
-        - 'general'
-        - 'error'
-        - 'slowquery'
-      Tags:
-        - Key: 'Name'
-          Value: !Ref 'BaseName'
-        - Key: 'Env'
-          Value: !Ref 'Environment'
-
-  DatabaseInstance1:
-    Type: 'AWS::RDS::DBInstance'
-    Properties:
-      DBClusterIdentifier: !Ref 'DatabaseCluster'
-      DBInstanceIdentifier: !Sub '${BaseName}-mysql-instance1'
-      DBInstanceClass: !Ref 'DatabaseClass'
-      Engine: 'aurora-mysql'
-      Tags:
-        - Key: 'Name'
-          Value: !Sub '${BaseName}-1'
-        - Key: 'Env'
-          Value: !Ref 'Environment'
-
-  DatabaseSG:
-    Type: 'AWS::EC2::SecurityGroup'
-    Properties:
-      GroupDescription: 'Enable access to database'
-      VpcId: !Ref 'VpcId'
-      SecurityGroupIngress:
-        - IpProtocol: 'tcp'
-          FromPort: 3306
-          ToPort: 3306
-          SourceSecurityGroupId: !Ref 'ServiceSG'
-      Tags:
-        - Key: 'Name'
-          Value: !Sub '${BaseName}-db'
-        - Key: 'Env'
-          Value: !Ref 'Environment'
-
-  ElasticFilesystem:
-    Type: 'AWS::EFS::FileSystem'
-    Properties:
-      PerformanceMode: 'generalPurpose'
-      FileSystemTags:
-        - Key: 'Name'
-          Value: !Ref 'BaseName'
-        - Key: 'Env'
-          Value: !Ref 'Environment'
+          TargetGroupArn: !Ref 'TargetGroup'
 
   ContentAccessPoint:
     Type: 'AWS::EFS::AccessPoint'
     Properties:
-      FileSystemId: !Ref 'ElasticFilesystem'
+      FileSystemId: !Ref 'FileSystemId'
       RootDirectory:
         Path: '/wp-content'
         CreationInfo:
@@ -544,48 +438,10 @@ Resources:
         - Key: 'Env'
           Value: !Ref 'Environment'
 
-  MountTargetA:
-    Type: 'AWS::EFS::MountTarget'
-    Properties:
-      FileSystemId: !Ref 'ElasticFilesystem'
-      SecurityGroups:
-        - !Ref 'FilesystemSG'
-      SubnetId: !Ref 'SubnetA'
-
-  MountTargetB:
-    Type: 'AWS::EFS::MountTarget'
-    Properties:
-      FileSystemId: !Ref 'ElasticFilesystem'
-      SecurityGroups:
-        - !Ref 'FilesystemSG'
-      SubnetId: !Ref 'SubnetB'
-
-  FilesystemSG:
-    Type: 'AWS::EC2::SecurityGroup'
-    Properties:
-      GroupDescription: 'Enable access to EFS Filesystem'
-      VpcId: !Ref 'VpcId'
-      SecurityGroupIngress:
-        - IpProtocol: 'tcp'
-          FromPort: 2049
-          ToPort: 2049
-          SourceSecurityGroupId: !Ref 'ServiceSG'
-      Tags:
-        - Key: 'Name'
-          Value: !Sub '${BaseName}-fs'
-        - Key: 'Env'
-          Value: !Ref 'Environment'
-
 Outputs:
 
-  LoadBalancerDns:
-    Description: 'Load balancer DNS endpoint'
-    Value: !GetAtt 'LoadBalancer.DNSName'
+  ServiceSG:
+    Description: 'Service security group'
+    Value: !Ref 'ServiceSG'
     Export:
-      Name: !Sub '${AWS::StackName}-LoadBalancerDns'
-
-  LoadBalancerSG:
-    Description: 'SG for Load Balancer'
-    Value: !Ref 'LoadBalancerSG'
-    Export:
-      Name: !Sub '${AWS::StackName}-LoadBalancerSG'
+      Name: !Sub '${AWS::StackName}-ServiceSG'

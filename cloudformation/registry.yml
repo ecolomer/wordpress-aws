@@ -1,0 +1,107 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AWS WordPress Docker Registry'
+
+Metadata:
+
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'General configuration'
+        Parameters:
+          - 'BaseName'
+          - 'Environment'
+      - Label:
+          default: 'SSM configuration'
+        Parameters:
+          - 'SsmKeyPrefix'
+    ParameterLabels:
+      BaseName:
+        default: 'Base resource name'
+      Environment:
+        default: 'Environment'
+      SsmKeyPrefix:
+        default: 'Key prefix'
+
+Parameters:
+
+  BaseName:
+    Description: 'This name will be used to build identifiers for the components in the stack'
+    Type: 'String'
+    AllowedPattern: '[-_a-z0-9]+'
+    ConstraintDescription: 'Invalid name. Only lowercase letters, numbers, underscores and hyphens are allowed.'
+    Default: 'ecr'
+
+  Environment:
+    Description: 'Stack environment name'
+    Type: 'String'
+    AllowedValues:
+      - 'Pro'
+      - 'Pre'
+    Default: 'Pro'
+
+  SsmKeyPrefix:
+    Description: 'Key prefix for AWS Systems Manager Parameters created in this stack'
+    Type: 'String'
+    Default: '/repository'
+
+Resources:
+
+  WordPressSetup:
+    Type: 'AWS::ECR::Repository'
+    Properties:
+      RepositoryName: !Sub '${BaseName}-setup'
+      ImageTagMutability: 'MUTABLE'
+      Tags:
+        - Key: 'Name'
+          Value: !Sub '${BaseName}-setup'
+        - Key: 'Env'
+          Value: !Ref 'Environment'
+
+  WordPressService:
+    Type: 'AWS::ECR::Repository'
+    Properties:
+      RepositoryName: !Sub '${BaseName}-service'
+      ImageTagMutability: 'MUTABLE'
+      Tags:
+        - Key: 'Name'
+          Value: !Sub '${BaseName}-service'
+        - Key: 'Env'
+          Value: !Ref 'Environment'
+
+  SsmWordPressSetup:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '${SsmKeyPrefix}/wordpress-setup'
+      Type: String
+      Value: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${WordPressSetup}'
+      Description: !Sub '${AWS::StackName} - Setup Repository'
+      Tags:
+        Name: !Sub '${BaseName}-setup'
+        Env: !Ref 'Environment'
+
+  SsmWordPressService:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '${SsmKeyPrefix}/wordpress-service'
+      Type: String
+      Value: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${WordPressService}'
+      Description: !Sub '${AWS::StackName} - Service Repository'
+      Tags:
+        Name: !Sub '${BaseName}-service'
+        Env: !Ref 'Environment'
+
+
+Outputs:
+
+  WordPressSetup:
+    Description: 'WordPress Setup repository URI'
+    Value: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${WordPressSetup}'
+    Export:
+      Name: !Sub '${AWS::StackName}-WordPressSetup'
+
+  WordPressService:
+    Description: 'WordPress Service repository URI'
+    Value: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${WordPressService}'
+    Export:
+      Name: !Sub '${AWS::StackName}-WordPressService'
