@@ -14,7 +14,7 @@ if [ "$retries" -eq 0 ]; then
 fi
 
 echo -e "\nChecking if database exists ..."
-if ! mysql -h $DB_HOST -u $DB_USER -p$DB_PASSWORD -e "use $WP_DATABASE;"; then
+if ! mysql -h $DB_HOST -u $DB_USER -p$DB_PASSWORD -e "use $WP_DATABASE;" > /dev/null 2>&1; then
   echo "Database does not exist. Creating ..."
   mysql -h $DB_HOST -u $DB_USER -p$DB_PASSWORD <<-EOF
   CREATE DATABASE $WP_DATABASE;
