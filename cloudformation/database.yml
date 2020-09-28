@@ -22,6 +22,7 @@ Metadata:
           - 'DatabaseClass'
           - 'DatabaseMasterUser'
           - 'DatabaseMasterPassword'
+          - 'DatabaseTimeZone'
       - Label:
           default: 'SSM configuration'
         Parameters:
@@ -41,6 +42,8 @@ Metadata:
         default: 'Database Master User'
       DatabaseMasterPassword:
         default: 'Database Master Password'
+      DatabaseTimeZone:
+        default: 'Database Time Zone'
       SsmKeyPrefix:
         default: 'Key prefix'
 
@@ -90,6 +93,11 @@ Parameters:
     ConstraintDescription: 'Invalid password. Must be at least 8 characters containing letters, numbers, and symbols.'
     NoEcho: true
 
+  DatabaseTimeZone:
+    Description: 'Database time zone'
+    Type: 'String'
+    Default: 'Europe/Paris'
+
   SsmKeyPrefix:
     Description: 'Key prefix for AWS Systems Manager Parameters created in this stack'
     Type: 'String'
@@ -115,7 +123,7 @@ Resources:
       Description: !Sub 'Database parameter group for ${AWS::StackName}'
       Family: 'aurora-mysql5.7'
       Parameters:
-        time_zone: 'Europe/Paris'
+        time_zone: !Ref 'DatabaseTimeZone'
       Tags:
         - Key: 'Name'
           Value: !Ref 'BaseName'
