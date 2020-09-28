@@ -159,6 +159,17 @@ Resources:
         Name: !Sub '${BaseName}-dnsendpoint'
         Env: !Ref 'Environment'
 
+  SsmHostedZoneId:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '${SsmKeyPrefix}/hostedzone-id'
+      Type: String
+      Value: !GetAtt 'LoadBalancer.CanonicalHostedZoneID'
+      Description: !Sub '${AWS::StackName} - Load Balancer Route53 HostedZone identifier'
+      Tags:
+        Name: !Sub '${BaseName}-hostedzoneid'
+        Env: !Ref 'Environment'
+
   SsmListenerHttpArn:
     Type: AWS::SSM::Parameter
     Properties:
@@ -194,11 +205,17 @@ Resources:
 
 Outputs:
 
-  LoadBalancerDns:
+  DnsEndpoint:
     Description: 'Load balancer DNS endpoint'
     Value: !GetAtt 'LoadBalancer.DNSName'
     Export:
-      Name: !Sub '${AWS::StackName}-LoadBalancerDns'
+      Name: !Sub '${AWS::StackName}-DnsEndpoint'
+
+  HostedZoneId:
+    Description: 'Load balancer Route53 HostedZone identifier'
+    Value: !GetAtt 'LoadBalancer.CanonicalHostedZoneID'
+    Export:
+      Name: !Sub '${AWS::StackName}-HostedZoneId'
 
   ListenerHttpArn:
     Description: 'Load balancer HTTP listener ARN'

@@ -11,7 +11,6 @@ Metadata:
         Parameters:
           - 'BaseName'
           - 'Environment'
-          - 'SiteDomain'
       - Label:
           default: 'Network configuration'
         Parameters:
@@ -20,9 +19,13 @@ Metadata:
       - Label:
           default: 'Load Balancer configuration'
         Parameters:
+          - 'LoadBalancerEndpoint'
+          - 'LoadBalancerHostedZoneId'
           - 'ListenerHttpArn'
           - 'ListenerHttpsArn'
           - 'LoadBalancerSG'
+          - 'WordPressDnsName'
+          - 'WordPressHostedZone'
       - Label:
           default: 'Container configuration'
         Parameters:
@@ -51,18 +54,24 @@ Metadata:
         default: 'Base resource name'
       Environment:
         default: 'Environment'
-      SiteDomain:
-        default: 'Site Domain'
       VpcId:
         default: 'VPC Identifier'
       Subnets:
         default: 'VPC Subnets'
+      LoadBalancerEndpoint:
+        default: 'Public DNS endpoint'
+      LoadBalancerHostedZoneId:
+        default: 'Route53 HostedZone identifier'
       ListenerHttpArn:
         default: 'HTTP listener identifier'
       ListenerHttpsArn:
         default: 'HTTPS listener identifier'
       LoadBalancerSG:
-        default: 'Load Balancer security group'
+        default: 'Security group'
+      WordPressDnsName:
+        default: 'WordPress DNS domain name'
+      WordPressHostedZone:
+        default: 'WordPress Route53 hosted zone name'
       SetupImage:
         default: 'WordPress setup container image repository URL'
       WordPressImage:
@@ -109,11 +118,6 @@ Parameters:
       - 'Pre'
     Default: 'Pro'
 
-  SiteDomain:
-    Description: 'WordPress Site Domain'
-    Type: 'String'
-    Default: 'blog.wordpress.local'
-
   VpcId:
     Description: 'AWS SSM Parameter name storing the VPC identifier'
     Type: 'AWS::SSM::Parameter::Value<AWS::EC2::VPC::Id>'
@@ -123,6 +127,16 @@ Parameters:
     Description: 'AWS SSM Parameter name storing subnets for ECS containers'
     Type: 'AWS::SSM::Parameter::Value<List<AWS::EC2::Subnet::Id>>'
     Default: '/network/subnets'
+
+  LoadBalancerEndpoint:
+    Description: 'AWS SSM Parameter name containing the load balancer DNS endpoint'
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: '/balancer/dns-endpoint'
+
+  LoadBalancerHostedZoneId:
+    Description: 'AWS SSM Parameter name containing the load balancer Route53 hosted zone identifier'
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: '/balancer/hostedzone-id'
 
   ListenerHttpArn:
     Description: 'AWS SSM Parameter name containing the load balancer HTTP listener ARN'
@@ -138,6 +152,16 @@ Parameters:
     Description: 'AWS SSM Parameter name containing the load balancer security group identifier'
     Type: 'AWS::SSM::Parameter::Value<String>'
     Default: '/balancer/security-group'
+
+  WordPressDnsName:
+    Description: 'Domain name to be used by WordPress'
+    Type: 'String'
+    Default: 'blog.wordpress.local'
+
+  WordPressHostedZone:
+    Description: 'WordPress Route53 HostedZone name'
+    Type: 'String'
+    Default: ''
 
   SetupImage:
     Description: 'AWS SSM Parameter name containing the WordPress setup Docker image repository'
@@ -211,6 +235,7 @@ Parameters:
 
 Conditions:
   HasHttpsListener: !Not [ !Equals [ !Ref 'ListenerHttpArn', !Ref 'ListenerHttpsArn' ] ]
+  HasHostedZone: !Not [ !Equals [ !Ref 'WordPressHostedZone', '' ] ]
 
 Resources:
 
@@ -273,8 +298,8 @@ Resources:
             - Name: 'WORDPRESS_CONFIG_EXTRA'
               Value: !Sub
                 - |
-                  define('WP_HOME', '${Scheme}://${SiteDomain}');
-                  define('WP_SITEURL', '${Scheme}://${SiteDomain}');
+                  define('WP_HOME', '${Scheme}://${WordPressDnsName}');
+                  define('WP_SITEURL', '${Scheme}://${WordPressDnsName}');
                   define('FS_METHOD', 'direct');
                 - Scheme: !If [ 'HasHttpsListener', 'https', 'http' ]
           Secrets:
@@ -430,7 +455,7 @@ Resources:
       Conditions:
         - Field: 'host-header'
           Values:
-            - !Ref 'SiteDomain'
+            - !Ref 'WordPressDnsName'
       Actions:
         - Type: 'forward'
           TargetGroupArn: !Ref 'TargetGroup'
@@ -444,10 +469,22 @@ Resources:
       Conditions:
         - Field: 'host-header'
           Values:
-            - !Ref 'SiteDomain'
+            - !Ref 'WordPressDnsName'
       Actions:
         - Type: 'forward'
           TargetGroupArn: !Ref 'TargetGroup'
+
+  DomainRecord:
+    Type: 'AWS::Route53::RecordSetGroup'
+    Condition: 'HasHostedZone'
+    Properties:
+      HostedZoneName: !Ref 'WordPressHostedZone'
+      RecordSets:
+      - Name: !Ref 'WordPressDnsName'
+        Type: 'A'
+        AliasTarget:
+          DNSName: !Ref 'LoadBalancerEndpoint'
+          HostedZoneId: !Ref 'LoadBalancerHostedZoneId'
 
   ContentAccessPoint:
     Type: 'AWS::EFS::AccessPoint'
