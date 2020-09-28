@@ -20,7 +20,8 @@ Metadata:
       - Label:
           default: 'Load Balancer configuration'
         Parameters:
-          - 'ListenerArn'
+          - 'ListenerHttpArn'
+          - 'ListenerHttpsArn'
           - 'LoadBalancerSG'
       - Label:
           default: 'Container configuration'
@@ -56,8 +57,10 @@ Metadata:
         default: 'VPC Identifier'
       Subnets:
         default: 'VPC Subnets'
-      ListenerArn:
-        default: 'Listener identifier'
+      ListenerHttpArn:
+        default: 'HTTP listener identifier'
+      ListenerHttpsArn:
+        default: 'HTTPS listener identifier'
       LoadBalancerSG:
         default: 'Load Balancer security group'
       SetupImage:
@@ -121,10 +124,15 @@ Parameters:
     Type: 'AWS::SSM::Parameter::Value<List<AWS::EC2::Subnet::Id>>'
     Default: '/network/subnets'
 
-  ListenerArn:
-    Description: 'AWS SSM Parameter name containing the load balancer listener ARN'
+  ListenerHttpArn:
+    Description: 'AWS SSM Parameter name containing the load balancer HTTP listener ARN'
     Type: 'AWS::SSM::Parameter::Value<String>'
-    Default: '/balancer/listener'
+    Default: '/balancer/listenerhttp-arn'
+
+  ListenerHttpsArn:
+    Description: 'AWS SSM Parameter name containing the load balancer HTTPS listener ARN'
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: '/balancer/listenerhttps-arn'
 
   LoadBalancerSG:
     Description: 'AWS SSM Parameter name containing the load balancer security group identifier'
@@ -201,6 +209,9 @@ Parameters:
     Type: 'AWS::SSM::Parameter::Value<String>'
     Default: '/filesystem/security-group'
 
+Conditions:
+  HasHttpsListener: !Not [ !Equals [ !Ref 'ListenerHttpArn', !Ref 'ListenerHttpsArn' ] ]
+
 Resources:
 
   TaskDefinition:
@@ -260,10 +271,12 @@ Resources:
             - Name: 'WORDPRESS_DB_USER'
               Value: !Ref 'DatabaseWpUser'
             - Name: 'WORDPRESS_CONFIG_EXTRA'
-              Value: !Sub |
-                  define('WP_HOME', 'http://${SiteDomain}');
-                  define('WP_SITEURL', 'http://${SiteDomain}');
+              Value: !Sub
+                - |
+                  define('WP_HOME', '${Scheme}://${SiteDomain}');
+                  define('WP_SITEURL', '${Scheme}://${SiteDomain}');
                   define('FS_METHOD', 'direct');
+                - Scheme: !If [ 'HasHttpsListener', 'https', 'http' ]
           Secrets:
             - Name: 'WORDPRESS_DB_PASSWORD'
               ValueFrom: !Ref 'DatabaseWpPassword'
@@ -310,7 +323,7 @@ Resources:
   TaskService:
     Type: 'AWS::ECS::Service'
     DependsOn:
-      - 'ListenerRule'
+      - 'ListenerHttpRule'
     Properties:
       ServiceName: !Ref 'BaseName'
       Cluster: !Ref 'ContainerCluster'
@@ -409,10 +422,24 @@ Resources:
         - Key: 'Env'
           Value: !Ref 'Environment'
 
-  ListenerRule:
+  ListenerHttpRule:
     Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
     Properties:
-      ListenerArn: !Ref 'ListenerArn'
+      ListenerArn: !Ref 'ListenerHttpArn'
+      Priority: 10
+      Conditions:
+        - Field: 'host-header'
+          Values:
+            - !Ref 'SiteDomain'
+      Actions:
+        - Type: 'forward'
+          TargetGroupArn: !Ref 'TargetGroup'
+
+  ListenerHttpsRule:
+    Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
+    Condition: HasHttpsListener
+    Properties:
+      ListenerArn: !Ref 'ListenerHttpsArn'
       Priority: 10
       Conditions:
         - Field: 'host-header'

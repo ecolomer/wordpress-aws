@@ -11,6 +11,7 @@ Metadata:
         Parameters:
           - 'BaseName'
           - 'Environment'
+          - 'Certificate'
       - Label:
           default: 'Network configuration'
         Parameters:
@@ -25,6 +26,8 @@ Metadata:
         default: 'Base resource name'
       Environment:
         default: 'Environment'
+      Certificate:
+        default: 'TLS Certificate'
       VpcId:
         default: 'VPC Identifier'
       Subnets:
@@ -48,6 +51,11 @@ Parameters:
       - 'Pro'
       - 'Pre'
     Default: 'Pro'
+
+  Certificate:
+    Description: 'AWS SSM Parameter name storing the TLS certificate ARN (certificate must be stored in ACM in the same region as the load balancer)'
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: '/balancer/certificate'
 
   VpcId:
     Description: 'AWS SSM Parameter name storing the VPC identifier'
@@ -85,12 +93,24 @@ Resources:
         - Key: 'Env'
           Value: !Ref 'Environment'
 
-  Listener:
+  ListenerHttp:
     Type: 'AWS::ElasticLoadBalancingV2::Listener'
     Properties:
       LoadBalancerArn: !Ref 'LoadBalancer'
       Port: 80
       Protocol: 'HTTP'
+      DefaultActions:
+        - Type: 'forward'
+          TargetGroupArn: !Ref 'DefaultTargetGroup'
+
+  ListenerHttps:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Properties:
+      LoadBalancerArn: !Ref 'LoadBalancer'
+      Port: 443
+      Protocol: 'HTTPS'
+      Certificates:
+        - CertificateArn: !Ref 'Certificate'
       DefaultActions:
         - Type: 'forward'
           TargetGroupArn: !Ref 'DefaultTargetGroup'
@@ -118,6 +138,10 @@ Resources:
           FromPort: 80
           ToPort: 80
           CidrIp: '0.0.0.0/0'
+        - IpProtocol: 'tcp'
+          FromPort: 443
+          ToPort: 443
+          CidrIp: '0.0.0.0/0'
       Tags:
         - Key: 'Name'
           Value: !Sub '${BaseName}-lb'
@@ -135,15 +159,26 @@ Resources:
         Name: !Sub '${BaseName}-dnsendpoint'
         Env: !Ref 'Environment'
 
-  SsmListenerArn:
+  SsmListenerHttpArn:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: !Sub '${SsmKeyPrefix}/listener-arn'
+      Name: !Sub '${SsmKeyPrefix}/listenerhttp-arn'
       Type: String
-      Value: !Ref 'Listener'
-      Description: !Sub '${AWS::StackName} - Load Balancer listener ARN'
+      Value: !Ref 'ListenerHttp'
+      Description: !Sub '${AWS::StackName} - Load Balancer HTTP listener ARN'
       Tags:
-        Name: !Sub '${BaseName}-listenerarn'
+        Name: !Sub '${BaseName}-listenerhttparn'
+        Env: !Ref 'Environment'
+
+  SsmListenerHttpsArn:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '${SsmKeyPrefix}/listenerhttps-arn'
+      Type: String
+      Value: !Ref 'ListenerHttps'
+      Description: !Sub '${AWS::StackName} - Load Balancer HTTPS listener ARN'
+      Tags:
+        Name: !Sub '${BaseName}-listenerhttpsarn'
         Env: !Ref 'Environment'
 
   SsmSecurityGroup:
@@ -165,11 +200,17 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-LoadBalancerDns'
 
-  ListenerArn:
-    Description: 'Load balancer listener ARN'
-    Value: !Ref 'Listener'
+  ListenerHttpArn:
+    Description: 'Load balancer HTTP listener ARN'
+    Value: !Ref 'ListenerHttp'
     Export:
-      Name: !Sub '${AWS::StackName}-ListenerArn'
+      Name: !Sub '${AWS::StackName}-ListenerHttpArn'
+
+  ListenerHttpsArn:
+    Description: 'Load balancer HTTPS listener ARN'
+    Value: !Ref 'ListenerHttps'
+    Export:
+      Name: !Sub '${AWS::StackName}-ListenerHttpsArn'
 
   LoadBalancerSG:
     Description: 'Security group for load balancer'
