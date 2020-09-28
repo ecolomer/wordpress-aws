@@ -127,10 +127,12 @@ Resources:
     Properties:
       DBClusterIdentifier: !Sub '${BaseName}-cluster'
       Engine: 'aurora-mysql'
-      EngineVersion: '5.7.12'
+      EngineVersion: '5.7.mysql_aurora.2.09.0'
       MasterUsername: !Ref 'DatabaseMasterUser'
       MasterUserPassword: !Ref 'DatabaseMasterPassword'
       DeletionProtection: true
+      BackupRetentionPeriod: 1
+      BacktrackWindow: 0
       DBClusterParameterGroupName: !Ref 'ParameterGroup'
       DBSubnetGroupName: !Ref 'SubnetGroup'
       VpcSecurityGroupIds:
