@@ -11,3 +11,9 @@
 
 # Local History for Visual Studio Code
 # .history/
+
+# CloudFormation parameter files
+cloudformation/*.json
+
+# cfn-lint config
+.cfnlintrc
