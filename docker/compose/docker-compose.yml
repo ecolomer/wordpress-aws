@@ -5,6 +5,7 @@ services:
     build: ../service
     image: wordpress:local
     restart: always
+    read_only: true
     ports:
       - "8000:80"
     environment:
@@ -21,6 +22,12 @@ services:
       - type: volume
         source: content
         target: /var/www/html/wp-content
+      - type: tmpfs
+        target: /run/lock/apache2
+      - type: tmpfs
+        target: /run/apache2
+      - type: tmpfs
+        target: /tmp
   db:
     image: mysql:5.7
     restart: always
