@@ -276,6 +276,7 @@ Resources:
         - Name: 'wordpress-service'
           Essential: true
           Image: !Ref 'WordPressImage'
+          ReadonlyRootFilesystem: true
           DependsOn:
             - Condition: 'SUCCESS'
               ContainerName: 'wordpress-setup'
@@ -288,6 +289,12 @@ Resources:
           MountPoints:
             - ContainerPath: '/var/www/html/wp-content'
               SourceVolume: 'content'
+            - ContainerPath: '/run/lock/apache2'
+              SourceVolume: 'lock'
+            - ContainerPath: '/run/apache2'
+              SourceVolume: 'run'
+            - ContainerPath: '/tmp'
+              SourceVolume: 'tmp'
           Environment:
             - Name: 'WORDPRESS_DB_HOST'
               Value: !Ref 'DatabaseHost'
@@ -314,6 +321,12 @@ Resources:
             AuthorizationConfig:
               AccessPointId: !Ref 'ContentAccessPoint'
             TransitEncryption: 'ENABLED'
+        - Name: 'lock'
+          Host: {}
+        - Name: 'run'
+          Host: {}
+        - Name: 'tmp'
+          Host: {}
 
   TaskExecutionRole:
     Type: 'AWS::IAM::Role'
