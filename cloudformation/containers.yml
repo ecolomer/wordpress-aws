@@ -21,9 +21,9 @@ Metadata:
         Parameters:
           - 'LoadBalancerEndpoint'
           - 'LoadBalancerHostedZoneId'
+          - 'LoadBalancerSG'
           - 'ListenerHttpArn'
           - 'ListenerHttpsArn'
-          - 'LoadBalancerSG'
           - 'WordPressDnsName'
           - 'WordPressHostedZone'
       - Label:
@@ -62,12 +62,12 @@ Metadata:
         default: 'Public DNS endpoint'
       LoadBalancerHostedZoneId:
         default: 'Route53 HostedZone identifier'
+      LoadBalancerSG:
+        default: 'Security group'
       ListenerHttpArn:
         default: 'HTTP listener identifier'
       ListenerHttpsArn:
         default: 'HTTPS listener identifier'
-      LoadBalancerSG:
-        default: 'Security group'
       WordPressDnsName:
         default: 'WordPress DNS domain name'
       WordPressHostedZone:
@@ -138,6 +138,11 @@ Parameters:
     Type: 'AWS::SSM::Parameter::Value<String>'
     Default: '/balancer/hostedzone-id'
 
+  LoadBalancerSG:
+    Description: 'AWS SSM Parameter name containing the load balancer security group identifier'
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: '/balancer/security-group'
+
   ListenerHttpArn:
     Description: 'AWS SSM Parameter name containing the load balancer HTTP listener ARN'
     Type: 'AWS::SSM::Parameter::Value<String>'
@@ -147,11 +152,6 @@ Parameters:
     Description: 'AWS SSM Parameter name containing the load balancer HTTPS listener ARN'
     Type: 'AWS::SSM::Parameter::Value<String>'
     Default: '/balancer/listenerhttps-arn'
-
-  LoadBalancerSG:
-    Description: 'AWS SSM Parameter name containing the load balancer security group identifier'
-    Type: 'AWS::SSM::Parameter::Value<String>'
-    Default: '/balancer/security-group'
 
   WordPressDnsName:
     Description: 'Domain name to be used by WordPress'
