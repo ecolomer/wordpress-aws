@@ -69,6 +69,17 @@ Resources:
         - Key: 'Env'
           Value: !Ref 'Environment'
 
+  OpenSshService:
+    Type: 'AWS::ECR::Repository'
+    Properties:
+      RepositoryName: !Sub '${BaseName}-ssh-service'
+      ImageTagMutability: 'MUTABLE'
+      Tags:
+        - Key: 'Name'
+          Value: !Sub '${BaseName}-ssh-service'
+        - Key: 'Env'
+          Value: !Ref 'Environment'
+
   SsmWordPressSetup:
     Type: AWS::SSM::Parameter
     Properties:
@@ -91,6 +102,17 @@ Resources:
         Name: !Sub '${BaseName}-service'
         Env: !Ref 'Environment'
 
+  SsmOpenSshService:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '${SsmKeyPrefix}/openssh-service'
+      Type: String
+      Value: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${OpenSshService}'
+      Description: !Sub '${AWS::StackName} - OpenSSH Repository'
+      Tags:
+        Name: !Sub '${BaseName}-ssh-service'
+        Env: !Ref 'Environment'
+
 
 Outputs:
 
@@ -105,3 +127,9 @@ Outputs:
     Value: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${WordPressService}'
     Export:
       Name: !Sub '${AWS::StackName}-WordPressService'
+
+  OpenSshService:
+    Description: 'OpenSSH Service repository URI'
+    Value: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${OpenSshService}'
+    Export:
+      Name: !Sub '${AWS::StackName}-OpenSshService'

@@ -31,6 +31,8 @@ Metadata:
         Parameters:
           - 'SetupImage'
           - 'WordPressImage'
+          - 'SshImage'
+          - 'SshPublicKey'
           - 'TaskCpu'
           - 'TaskMemory'
           - 'TaskCount'
@@ -76,6 +78,10 @@ Metadata:
         default: 'WordPress setup container image repository URL'
       WordPressImage:
         default: 'WordPress service container image repository URL'
+      SshImage:
+        default: 'OpenSSH container image repository URL'
+      SshPublicKey:
+        default: 'OpenSSH RSA public key'
       TaskCpu:
         default: 'Container CPU'
       TaskMemory:
@@ -172,6 +178,16 @@ Parameters:
     Description: 'AWS SSM Parameter name containing the WordPress service Docker image repository'
     Type: 'AWS::SSM::Parameter::Value<String>'
     Default: '/repository/wordpress-service'
+
+  SshImage:
+    Description: 'SSM Parameter name containing the OpenSSH Docker image repository'
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: '/repository/openssh-service'
+
+  SshPublicKey:
+    Description: 'RSA public key for OpenSSH container'
+    Type: 'String'
+    Default: ''
 
   TaskCpu:
     Description: 'CPU assigned to the container. 1024 is 1 CPU.'
@@ -317,6 +333,20 @@ Resources:
               ValueFrom: !Ref 'DatabaseWpPassword'
           PortMappings:
             - ContainerPort: 80
+        - Name: 'wordpress-ssh'
+          Essential: false
+          Image: !Ref 'SshImage'
+          LogConfiguration:
+            LogDriver: 'awslogs'
+            Options:
+              awslogs-group: !Ref 'CloudWatchLogsGroup'
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: 'wordpress-ssh'
+          Environment:
+            - Name: 'SSH_KEY'
+              Value: !Ref 'SshPublicKey'
+          PortMappings:
+            - ContainerPort: 22
       Volumes:
         - Name: 'content'
           EFSVolumeConfiguration:
@@ -416,6 +446,10 @@ Resources:
           FromPort: 80
           ToPort: 80
           SourceSecurityGroupId: !Ref 'LoadBalancerSG'
+        - IpProtocol: 'tcp'
+          FromPort: 22
+          ToPort: 22
+          CidrIp: '0.0.0.0/0'
       Tags:
         - Key: 'Name'
           Value: !Sub '${BaseName}-service'
