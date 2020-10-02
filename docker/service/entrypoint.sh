@@ -2,6 +2,7 @@
 set -euo pipefail
 
 echo "Ensuring correct permissions ..."
+chown -R www-data:www-data /var/log/pagespeed /var/cache/mod_pagespeed &
 # If we want to run a read-only root filesystem, we need to mount a
 # writable /tmp but ECS/Fargate 1.4.0 does not preserve underlying
 # permissions when mounting ephemeral task storage. This is why

@@ -296,6 +296,10 @@ Resources:
               SourceVolume: 'lock'
             - ContainerPath: '/run/apache2'
               SourceVolume: 'run'
+            - ContainerPath: '/var/cache/mod_pagespeed'
+              SourceVolume: 'mod_pagespeed'
+            - ContainerPath: '/var/log/pagespeed'
+              SourceVolume: 'log_pagespeed'
             - ContainerPath: '/tmp'
               SourceVolume: 'tmp'
           Environment:
@@ -327,6 +331,10 @@ Resources:
         - Name: 'lock'
           Host: {}
         - Name: 'run'
+          Host: {}
+        - Name: 'mod_pagespeed'
+          Host: {}
+        - Name: 'log_pagespeed'
           Host: {}
         - Name: 'tmp'
           Host: {}
