@@ -1,0 +1,25 @@
+{
+  "StackName": "WordPressECR",
+  "Parameters": [
+    {
+      "ParameterKey": "BaseName",
+      "ParameterValue": "wordpress"
+    },
+    {
+      "ParameterKey": "Environment",
+      "ParameterValue": "Pro"
+    },
+    {
+      "ParameterKey": "VpcId",
+      "ParameterValue": "/wordpress/network/vpc-id"
+    },
+    {
+      "ParameterKey": "Subnets",
+      "ParameterValue": "/wordpress/network/subnets/private/id"
+    },
+    {
+      "ParameterKey": "SsmKeyPrefix",
+      "ParameterValue": "/wordpress/efs"
+    }
+  ]
+}

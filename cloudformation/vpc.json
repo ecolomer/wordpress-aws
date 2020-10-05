@@ -1,0 +1,53 @@
+{
+  "StackName": "WordPressVPC",
+  "Parameters": [
+    {
+      "ParameterKey": "PublicSubnetCidr",
+      "ParameterValue": "10.150.0.0/24,10.150.2.0/24,10.150.4.0/24"
+    },
+    {
+      "ParameterKey": "PrivateSubnetCidr",
+      "ParameterValue": "10.150.1.0/24,10.150.3.0/24,10.150.5.0/24"
+    },
+    {
+      "ParameterKey": "VpnNatSubnetCidr",
+      "ParameterValue": "10.150.250.0/24,10.150.252.0/24"
+    },
+    {
+      "ParameterKey": "AvailabilityZones",
+      "ParameterValue": "eu-west-1a,eu-west-1b,eu-west-1c"
+    },
+    {
+      "ParameterKey": "VpcCidr",
+      "ParameterValue": "10.150.0.0/16"
+    },
+    {
+      "ParameterKey": "BaseName",
+      "ParameterValue": "wordpress"
+    },
+    {
+      "ParameterKey": "Environment",
+      "ParameterValue": "Pro"
+    },
+    {
+      "ParameterKey": "SetupNatGateway",
+      "ParameterValue": "No"
+    },
+    {
+      "ParameterKey": "SetupNatInstance",
+      "ParameterValue": "No"
+    },
+    {
+      "ParameterKey": "NatInstanceType",
+      "ParameterValue": "t2.micro"
+    },
+    {
+      "ParameterKey": "NatInstanceImageId",
+      "ParameterValue": ""
+    },
+    {
+      "ParameterKey": "SsmKeyPrefix",
+      "ParameterValue": "/wordpress/network"
+    }
+  ]
+}
