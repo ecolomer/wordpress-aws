@@ -1,0 +1,25 @@
+{
+  "StackName": "WordPressCDN",
+  "Parameters": [
+    {
+      "ParameterKey": "BaseName",
+      "ParameterValue": "wordpress"
+    },
+    {
+      "ParameterKey": "Environment",
+      "ParameterValue": "Pro"
+    },
+    {
+      "ParameterKey": "WordPressBalancer",
+      "ParameterValue": "/wordpress/alb/dns-endpoint"
+    },
+    {
+      "ParameterKey": "WordPressDnsNames",
+      "ParameterValue": "/wordpress/domain-names"
+    },
+    {
+      "ParameterKey": "Certificate",
+      "ParameterValue": "/wordpress/cdn/certificate"
+    }
+  ]
+}
