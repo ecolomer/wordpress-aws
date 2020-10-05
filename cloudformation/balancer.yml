@@ -74,14 +74,15 @@ Parameters:
 
 Resources:
 
-  LoadBalancer:
+  PublicLoadBalancer:
     Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
     Properties:
-      Name: !Ref 'BaseName'
+      Name: !Sub '${BaseName}-public'
       Type: 'application'
       Subnets: !Ref 'Subnets'
+      Scheme: 'internet-facing'
       SecurityGroups:
-        - !Ref 'SecurityGroup'
+        - !Ref 'PublicSecurityGroup'
       LoadBalancerAttributes:
         - Key: 'deletion_protection.enabled'
           Value: 'true'
@@ -89,49 +90,49 @@ Resources:
           Value: 'false'
       Tags:
         - Key: 'Name'
-          Value: !Ref 'BaseName'
+          Value: !Sub '${BaseName}-public'
         - Key: 'Env'
           Value: !Ref 'Environment'
 
-  ListenerHttp:
+  PublicListenerHttp:
     Type: 'AWS::ElasticLoadBalancingV2::Listener'
     Properties:
-      LoadBalancerArn: !Ref 'LoadBalancer'
+      LoadBalancerArn: !Ref 'PublicLoadBalancer'
       Port: 80
       Protocol: 'HTTP'
       DefaultActions:
         - Type: 'forward'
-          TargetGroupArn: !Ref 'DefaultTargetGroup'
+          TargetGroupArn: !Ref 'PublicTargetGroup'
 
-  ListenerHttps:
+  PublicListenerHttps:
     Type: 'AWS::ElasticLoadBalancingV2::Listener'
     Properties:
-      LoadBalancerArn: !Ref 'LoadBalancer'
+      LoadBalancerArn: !Ref 'PublicLoadBalancer'
       Port: 443
       Protocol: 'HTTPS'
       Certificates:
         - CertificateArn: !Ref 'Certificate'
       DefaultActions:
         - Type: 'forward'
-          TargetGroupArn: !Ref 'DefaultTargetGroup'
+          TargetGroupArn: !Ref 'PublicTargetGroup'
 
-  DefaultTargetGroup:
+  PublicTargetGroup:
     Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
     Properties:
-      Name: !Sub '${BaseName}-default'
+      Name: !Sub '${BaseName}-public-default'
       Port: 80
       Protocol: 'HTTP'
       VpcId: !Ref 'VpcId'
       Tags:
         - Key: 'Name'
-          Value: !Sub '${BaseName}-default'
+          Value: !Sub '${BaseName}-publicdefault'
         - Key: 'Env'
           Value: !Ref 'Environment'
 
-  SecurityGroup:
+  PublicSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
-      GroupDescription: 'Enable access to load balancer'
+      GroupDescription: 'Enable access to public load balancer'
       VpcId: !Ref 'VpcId'
       SecurityGroupIngress:
         - IpProtocol: 'tcp'
@@ -144,93 +145,253 @@ Resources:
           CidrIp: '0.0.0.0/0'
       Tags:
         - Key: 'Name'
-          Value: !Sub '${BaseName}-lb'
+          Value: !Sub '${BaseName}-publicbalancer'
         - Key: 'Env'
           Value: !Ref 'Environment'
 
-  SsmDnsEndpoint:
+  PrivateLoadBalancer:
+    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
+    Properties:
+      Name: !Sub '${BaseName}-private'
+      Type: 'application'
+      Subnets: !Ref 'Subnets'
+      Scheme: 'internal'
+      SecurityGroups:
+        - !Ref 'PrivateSecurityGroup'
+      LoadBalancerAttributes:
+        - Key: 'deletion_protection.enabled'
+          Value: 'true'
+        - Key: 'routing.http2.enabled'
+          Value: 'false'
+      Tags:
+        - Key: 'Name'
+          Value: !Sub '${BaseName}-private'
+        - Key: 'Env'
+          Value: !Ref 'Environment'
+
+  PrivateListenerHttp:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Properties:
+      LoadBalancerArn: !Ref 'PrivateLoadBalancer'
+      Port: 80
+      Protocol: 'HTTP'
+      DefaultActions:
+        - Type: 'forward'
+          TargetGroupArn: !Ref 'PrivateTargetGroup'
+
+  PrivateListenerHttps:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Properties:
+      LoadBalancerArn: !Ref 'PrivateLoadBalancer'
+      Port: 443
+      Protocol: 'HTTPS'
+      Certificates:
+        - CertificateArn: !Ref 'Certificate'
+      DefaultActions:
+        - Type: 'forward'
+          TargetGroupArn: !Ref 'PrivateTargetGroup'
+
+  PrivateTargetGroup:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      Name: !Sub '${BaseName}-private-default'
+      Port: 80
+      Protocol: 'HTTP'
+      VpcId: !Ref 'VpcId'
+      Tags:
+        - Key: 'Name'
+          Value: !Sub '${BaseName}-privatedefault'
+        - Key: 'Env'
+          Value: !Ref 'Environment'
+
+  PrivateSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: 'Enable access to private load balancer'
+      VpcId: !Ref 'VpcId'
+      SecurityGroupIngress:
+        - IpProtocol: 'tcp'
+          FromPort: 80
+          ToPort: 80
+          CidrIp: '0.0.0.0/0'
+        - IpProtocol: 'tcp'
+          FromPort: 443
+          ToPort: 443
+          CidrIp: '0.0.0.0/0'
+      Tags:
+        - Key: 'Name'
+          Value: !Sub '${BaseName}-privatebalancer'
+        - Key: 'Env'
+          Value: !Ref 'Environment'
+
+  SsmPublicDnsEndpoint:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: !Sub '${SsmKeyPrefix}/dns-endpoint'
+      Name: !Sub '${SsmKeyPrefix}/public-dns-endpoint'
       Type: String
-      Value: !GetAtt 'LoadBalancer.DNSName'
-      Description: !Sub '${AWS::StackName} - Load Balancer DNS endpoint'
+      Value: !GetAtt 'PublicLoadBalancer.DNSName'
+      Description: !Sub '${AWS::StackName} - Public Load Balancer DNS endpoint'
       Tags:
-        Name: !Sub '${BaseName}-dnsendpoint'
+        Name: !Sub '${BaseName}-publicdnsendpoint'
         Env: !Ref 'Environment'
 
-  SsmHostedZoneId:
+  SsmPublicHostedZoneId:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: !Sub '${SsmKeyPrefix}/hostedzone-id'
+      Name: !Sub '${SsmKeyPrefix}/public-hostedzone-id'
       Type: String
-      Value: !GetAtt 'LoadBalancer.CanonicalHostedZoneID'
-      Description: !Sub '${AWS::StackName} - Load Balancer Route53 HostedZone identifier'
+      Value: !GetAtt 'PublicLoadBalancer.CanonicalHostedZoneID'
+      Description: !Sub '${AWS::StackName} - Public Load Balancer Route53 HostedZone identifier'
       Tags:
-        Name: !Sub '${BaseName}-hostedzoneid'
+        Name: !Sub '${BaseName}-publichostedzoneid'
         Env: !Ref 'Environment'
 
-  SsmListenerHttpArn:
+  SsmPublicListenerHttpArn:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: !Sub '${SsmKeyPrefix}/listenerhttp-arn'
+      Name: !Sub '${SsmKeyPrefix}/public-listenerhttp-arn'
       Type: String
-      Value: !Ref 'ListenerHttp'
-      Description: !Sub '${AWS::StackName} - Load Balancer HTTP listener ARN'
+      Value: !Ref 'PublicListenerHttp'
+      Description: !Sub '${AWS::StackName} - Public Load Balancer HTTP listener ARN'
       Tags:
-        Name: !Sub '${BaseName}-listenerhttparn'
+        Name: !Sub '${BaseName}-publichttparn'
         Env: !Ref 'Environment'
 
-  SsmListenerHttpsArn:
+  SsmPublicListenerHttpsArn:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: !Sub '${SsmKeyPrefix}/listenerhttps-arn'
+      Name: !Sub '${SsmKeyPrefix}/public-listenerhttps-arn'
       Type: String
-      Value: !Ref 'ListenerHttps'
-      Description: !Sub '${AWS::StackName} - Load Balancer HTTPS listener ARN'
+      Value: !Ref 'PublicListenerHttps'
+      Description: !Sub '${AWS::StackName} - Public Load Balancer HTTPS listener ARN'
       Tags:
-        Name: !Sub '${BaseName}-listenerhttpsarn'
+        Name: !Sub '${BaseName}-publichttpsarn'
         Env: !Ref 'Environment'
 
-  SsmSecurityGroup:
+  SsmPublicSecurityGroup:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: !Sub '${SsmKeyPrefix}/security-group'
+      Name: !Sub '${SsmKeyPrefix}/public-security-group'
       Type: String
-      Value: !Ref 'SecurityGroup'
-      Description: !Sub '${AWS::StackName} - Security group'
+      Value: !Ref 'PublicSecurityGroup'
+      Description: !Sub '${AWS::StackName} - Public Load Balancer security group'
       Tags:
-        Name: !Sub '${BaseName}-securitygroup'
+        Name: !Sub '${BaseName}-publicsecuritygroup'
+        Env: !Ref 'Environment'
+
+  SsmPrivateDnsEndpoint:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '${SsmKeyPrefix}/private-dns-endpoint'
+      Type: String
+      Value: !GetAtt 'PrivateLoadBalancer.DNSName'
+      Description: !Sub '${AWS::StackName} - Private Load Balancer DNS endpoint'
+      Tags:
+        Name: !Sub '${BaseName}-privatednsendpoint'
+        Env: !Ref 'Environment'
+
+  SsmPrivateHostedZoneId:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '${SsmKeyPrefix}/private-hostedzone-id'
+      Type: String
+      Value: !GetAtt 'PrivateLoadBalancer.CanonicalHostedZoneID'
+      Description: !Sub '${AWS::StackName} - Private Load Balancer Route53 HostedZone identifier'
+      Tags:
+        Name: !Sub '${BaseName}-privatehostedzoneid'
+        Env: !Ref 'Environment'
+
+  SsmPrivateListenerHttpArn:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '${SsmKeyPrefix}/private-listenerhttp-arn'
+      Type: String
+      Value: !Ref 'PrivateListenerHttp'
+      Description: !Sub '${AWS::StackName} - Private Load Balancer HTTP listener ARN'
+      Tags:
+        Name: !Sub '${BaseName}-privatehttparn'
+        Env: !Ref 'Environment'
+
+  SsmPrivateListenerHttpsArn:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '${SsmKeyPrefix}/private-listenerhttps-arn'
+      Type: String
+      Value: !Ref 'PrivateListenerHttps'
+      Description: !Sub '${AWS::StackName} - Private Load Balancer HTTPS listener ARN'
+      Tags:
+        Name: !Sub '${BaseName}-privatehttpsarn'
+        Env: !Ref 'Environment'
+
+  SsmPrivateSecurityGroup:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '${SsmKeyPrefix}/private-security-group'
+      Type: String
+      Value: !Ref 'PrivateSecurityGroup'
+      Description: !Sub '${AWS::StackName} - Private Load Balancer security group'
+      Tags:
+        Name: !Sub '${BaseName}-privatesecuritygroup'
         Env: !Ref 'Environment'
 
 Outputs:
 
-  DnsEndpoint:
-    Description: 'Load balancer DNS endpoint'
-    Value: !GetAtt 'LoadBalancer.DNSName'
+  PublicDnsEndpoint:
+    Description: 'Public Load balancer DNS endpoint'
+    Value: !GetAtt 'PublicLoadBalancer.DNSName'
     Export:
-      Name: !Sub '${AWS::StackName}-DnsEndpoint'
+      Name: !Sub '${AWS::StackName}-PublicDnsEndpoint'
 
-  HostedZoneId:
-    Description: 'Load balancer Route53 HostedZone identifier'
-    Value: !GetAtt 'LoadBalancer.CanonicalHostedZoneID'
+  PublicHostedZoneId:
+    Description: 'Public Load balancer Route53 HostedZone identifier'
+    Value: !GetAtt 'PublicLoadBalancer.CanonicalHostedZoneID'
     Export:
-      Name: !Sub '${AWS::StackName}-HostedZoneId'
+      Name: !Sub '${AWS::StackName}-PublicHostedZoneId'
 
-  ListenerHttpArn:
-    Description: 'Load balancer HTTP listener ARN'
-    Value: !Ref 'ListenerHttp'
+  PublicListenerHttpArn:
+    Description: 'Public Load balancer HTTP listener ARN'
+    Value: !Ref 'PublicListenerHttp'
     Export:
-      Name: !Sub '${AWS::StackName}-ListenerHttpArn'
+      Name: !Sub '${AWS::StackName}-PublicListenerHttpArn'
 
-  ListenerHttpsArn:
-    Description: 'Load balancer HTTPS listener ARN'
-    Value: !Ref 'ListenerHttps'
+  PublicListenerHttpsArn:
+    Description: 'Public Load balancer HTTPS listener ARN'
+    Value: !Ref 'PublicListenerHttps'
     Export:
-      Name: !Sub '${AWS::StackName}-ListenerHttpsArn'
+      Name: !Sub '${AWS::StackName}-PublicListenerHttpsArn'
 
-  LoadBalancerSG:
-    Description: 'Security group for load balancer'
-    Value: !Ref 'SecurityGroup'
+  PublicSecurityGroup:
+    Description: 'Public security group for load balancer'
+    Value: !Ref 'PublicSecurityGroup'
     Export:
-      Name: !Sub '${AWS::StackName}-SecurityGroup'
+      Name: !Sub '${AWS::StackName}-PublicSecurityGroup'
+
+  PrivateDnsEndpoint:
+    Description: 'Private Load balancer DNS endpoint'
+    Value: !GetAtt 'PrivateLoadBalancer.DNSName'
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateDnsEndpoint'
+
+  PrivateHostedZoneId:
+    Description: 'Private Load balancer Route53 HostedZone identifier'
+    Value: !GetAtt 'PrivateLoadBalancer.CanonicalHostedZoneID'
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateHostedZoneId'
+
+  PrivateListenerHttpArn:
+    Description: 'Private Load balancer HTTP listener ARN'
+    Value: !Ref 'PrivateListenerHttp'
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateListenerHttpArn'
+
+  PrivateListenerHttpsArn:
+    Description: 'Private Load balancer HTTPS listener ARN'
+    Value: !Ref 'PrivateListenerHttps'
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateListenerHttpsArn'
+
+  PrivateSecurityGroup:
+    Description: 'Private security group for load balancer'
+    Value: !Ref 'PrivateSecurityGroup'
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSecurityGroup'
