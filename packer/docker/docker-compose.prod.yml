@@ -17,6 +17,9 @@ services:
       - type: bind
         source: /data/wp-content
         target: /var/www/html/wp-content
+      - type: bind
+        source: /data/letsencrypt/www/.well-known/acme-challenge
+        target: /var/www/html/.well-known/acme-challenge
       - type: tmpfs
         target: /run/lock/apache2
       - type: tmpfs

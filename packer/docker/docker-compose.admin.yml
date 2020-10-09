@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  wordpress:
+    image: <placeholder-image>
+    restart: always
+    read_only: true
+    ports:
+      - "443:443"
+    environment:
+      WORDPRESS_DB_HOST:
+      WORDPRESS_DB_USER:
+      WORDPRESS_DB_PASSWORD:
+      WORDPRESS_DB_NAME:
+      WORDPRESS_CONFIG_EXTRA:
+    volumes:
+      - type: bind
+        source: /data/wp-content
+        target: /var/www/html/wp-content
+      - type: bind
+        source: /data/letsencrypt/etc/archive
+        target: /etc/apache2/ssl/archive
+      - type: bind
+        source: /data/letsencrypt/etc/live
+        target: /etc/apache2/ssl/live
+      - type: bind
+        source: /data/letsencrypt/etc/certs
+        target: /etc/apache2/ssl/certs
+      - type: tmpfs
+        target: /run/lock/apache2
+      - type: tmpfs
+        target: /run/apache2
+      - type: tmpfs
+        target: /tmp
