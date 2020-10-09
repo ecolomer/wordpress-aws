@@ -22,5 +22,9 @@ services:
       - type: tmpfs
         target: /run/apache2
       - type: tmpfs
+        target: /var/cache/mod_pagespeed
+      - type: tmpfs
+        target: /var/log/pagespeed
+      - type: tmpfs
         target: /tmp
 
