@@ -138,6 +138,17 @@ Resources:
               - 'GET'
               - 'HEAD'
               - 'OPTIONS'
+          - PathPattern: '/.well-known/acme-challenge/*'
+            TargetOriginId: !Sub '${BaseName}-ELB'
+            ViewerProtocolPolicy: 'allow-all'
+            CachePolicyId: !Ref 'AcmeChallengeCachePolicy'
+            Compress: true
+            AllowedMethods:
+              - 'GET'
+              - 'HEAD'
+            CachedMethods:
+              - 'GET'
+              - 'HEAD'
       Tags:
         - Key: 'Name'
           Value: !Ref 'BaseName'
@@ -193,6 +204,27 @@ Resources:
               - 'Origin'
               - 'Access-Control-Request-Headers'
               - 'Access-Control-Request-Method'
+          QueryStringsConfig:
+            QueryStringBehavior: 'none'
+
+  AcmeChallengeCachePolicy:
+    Type: 'AWS::CloudFront::CachePolicy'
+    Properties:
+      CachePolicyConfig:
+        Comment: 'LetsEncrypt Acme Challenge Cache Behavior'
+        DefaultTTL: 0
+        MaxTTL: 31536000
+        MinTTL: 0
+        Name: !Sub '${BaseName}-acme-challenge'
+        ParametersInCacheKeyAndForwardedToOrigin:
+          CookiesConfig:
+            CookieBehavior: 'none'
+          EnableAcceptEncodingGzip: true
+          HeadersConfig:
+            HeaderBehavior: 'whitelist'
+            Headers:
+              - 'Host'
+              - 'Origin'
           QueryStringsConfig:
             QueryStringBehavior: 'none'
 

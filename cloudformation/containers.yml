@@ -33,6 +33,7 @@ Metadata:
           - 'ImageId'
           - 'InstanceType'
           - 'DesiredCount'
+          - 'AdminImage'
           - 'WordPressImage'
       - Label:
           default: 'Database configuration'
@@ -78,6 +79,8 @@ Metadata:
         default: 'Instance type'
       DesiredCount:
         default: 'Desired number of instances'
+      AdminImage:
+        default: 'WordPress admin container image repository'
       WordPressImage:
         default: 'WordPress service container image repository'
       DatabaseHost:
@@ -177,6 +180,11 @@ Parameters:
     Type: 'Number'
     Default: 1
 
+  AdminImage:
+    Description: 'AWS SSM Parameter name containing the WordPress admin Docker image repository'
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: '/repository/wordpress-admin'
+
   WordPressImage:
     Description: 'AWS SSM Parameter name containing the WordPress service Docker image repository'
     Type: 'AWS::SSM::Parameter::Value<String>'
@@ -241,7 +249,8 @@ Resources:
           #!/bin/bash
 
           # Update docker-compose files with stack parameters
-          sed -i -e 's|<placeholder-image>|${WordPressImage}|' /data/docker/docker-compose.yml
+          sed -i -e 's|<placeholder-image>|${WordPressImage}|' /data/docker/docker-compose.prod.yml
+          sed -i -e 's|<placeholder-image>|${AdminImage}|' /data/docker/docker-compose.admin.yml
 
           # Define WordPress Docker image environment variables
           export WORDPRESS_DB_HOST=${DatabaseHost}
@@ -256,7 +265,13 @@ Resources:
             echo "*/5 *   * * *   root    /data/scripts/sync-to-s3.sh ${ContentBucket}" >> /etc/crontab
 
           # Launch production container
-          docker-compose -f /data/docker/docker-compose.yml -p prod up -d
+          mkdir -p /data/letsencrypt/www/.well-known/acme-challenge
+          docker-compose -f /data/docker/docker-compose.prod.yml -p prod up -d
+
+          # Launch admin container
+          chmod 755 /data/scripts/run-certbot.sh && /data/scripts/run-certbot.sh ${WordPressDnsName} &&
+            docker-compose -f /data/docker/docker-compose.admin.yml -p admin up -d
+          echo "0 0   * * 0   root    /data/scripts/run-certbot.sh ${WordPressDnsName}" >> /etc/crontab
 
           # Setup recurrent content backup job
           chmod 755 /data/scripts/backup-to-s3.sh &&
@@ -355,6 +370,10 @@ Resources:
           FromPort: 80
           ToPort: 80
           SourceSecurityGroupId: !Ref 'LoadBalancerSG'
+        - IpProtocol: 'tcp'
+          FromPort: 443
+          ToPort: 443
+          CidrIp: '0.0.0.0/0'
       Tags:
         - Key: 'Name'
           Value: !Sub '${BaseName}-service'
