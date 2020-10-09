@@ -47,17 +47,6 @@ Parameters:
 
 Resources:
 
-  WordPressSetup:
-    Type: 'AWS::ECR::Repository'
-    Properties:
-      RepositoryName: !Sub '${BaseName}-setup'
-      ImageTagMutability: 'MUTABLE'
-      Tags:
-        - Key: 'Name'
-          Value: !Sub '${BaseName}-setup'
-        - Key: 'Env'
-          Value: !Ref 'Environment'
-
   WordPressService:
     Type: 'AWS::ECR::Repository'
     Properties:
@@ -68,17 +57,6 @@ Resources:
           Value: !Sub '${BaseName}-service'
         - Key: 'Env'
           Value: !Ref 'Environment'
-
-  SsmWordPressSetup:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: !Sub '${SsmKeyPrefix}/wordpress-setup'
-      Type: String
-      Value: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${WordPressSetup}'
-      Description: !Sub '${AWS::StackName} - Setup Repository'
-      Tags:
-        Name: !Sub '${BaseName}-setup'
-        Env: !Ref 'Environment'
 
   SsmWordPressService:
     Type: AWS::SSM::Parameter
@@ -93,12 +71,6 @@ Resources:
 
 
 Outputs:
-
-  WordPressSetup:
-    Description: 'WordPress Setup repository URI'
-    Value: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${WordPressSetup}'
-    Export:
-      Name: !Sub '${AWS::StackName}-WordPressSetup'
 
   WordPressService:
     Description: 'WordPress Service repository URI'
