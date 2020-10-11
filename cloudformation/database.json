@@ -1,0 +1,42 @@
+{
+  "StackName": "WordPressDB",
+  "Parameters": [
+    {
+      "ParameterKey": "Subnets",
+      "ParameterValue": "/wordpress/network/subnets/private/id"
+    },
+    {
+      "ParameterKey": "DatabaseClass",
+      "ParameterValue": "db.t3.small"
+    },
+    {
+      "ParameterKey": "VpcId",
+      "ParameterValue": "/wordpress/network/vpc-id"
+    },
+    {
+      "ParameterKey": "DatabaseMasterPassword",
+      "ParameterValue": "XXXXXXX"
+    },
+    {
+      "ParameterKey": "BaseName",
+      "ParameterValue": "wordpress"
+    },
+    {
+      "ParameterKey": "Environment",
+      "ParameterValue": "Pro"
+    },
+    {
+      "ParameterKey": "DatabaseMasterUser",
+      "ParameterValue": "/wordpress/database/masteruser"
+    },
+    {
+      "ParameterKey": "DatabaseTimeZone",
+      "ParameterValue": "Europe/Paris"
+    },
+    {
+      "ParameterKey": "SsmKeyPrefix",
+      "ParameterValue": "/wordpress/database"
+    }
+  ]
+}
+

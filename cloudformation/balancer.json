@@ -1,0 +1,29 @@
+{
+  "StackName": "WordPressLB",
+  "Parameters": [
+    {
+      "ParameterKey": "Subnets",
+      "ParameterValue": "/wordpress/network/subnets/public/id"
+    },
+    {
+      "ParameterKey": "VpcId",
+      "ParameterValue": "/wordpress/network/vpc-id"
+    },
+    {
+      "ParameterKey": "BaseName",
+      "ParameterValue": "wordpress"
+    },
+    {
+      "ParameterKey": "Environment",
+      "ParameterValue": "Pro"
+    },
+    {
+      "ParameterKey": "SsmKeyPrefix",
+      "ParameterValue": "/wordpress/alb"
+    },
+    {
+      "ParameterKey": "Certificate",
+      "ParameterValue": "/wordpress/alb/certificate"
+    }
+  ]
+}
