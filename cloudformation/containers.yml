@@ -411,11 +411,50 @@ Resources:
         - Key: 'Env'
           Value: !Ref 'Environment'
 
-  ListenerHttpRule:
+  BlockHttpRule:
     Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
     Properties:
       ListenerArn: !Ref 'ListenerHttpArn'
-      Priority: 10
+      Priority: 50
+      Conditions:
+        - Field: 'host-header'
+          HostHeaderConfig:
+            Values: !Ref 'LoadBalancerDnsNames'
+        - Field: 'path-pattern'
+          Values:
+            - '/wp-admin/*'
+            - '/wp-login.php'
+            - '/xmlrpc.php'
+      Actions:
+        - Type: 'fixed-response'
+          FixedResponseConfig:
+            StatusCode: '403'
+
+  BlockHttpsRule:
+    Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
+    Condition: HasHttpsListener
+    Properties:
+      ListenerArn: !Ref 'ListenerHttpsArn'
+      Priority: 50
+      Conditions:
+        - Field: 'host-header'
+          HostHeaderConfig:
+            Values: !Ref 'LoadBalancerDnsNames'
+        - Field: 'path-pattern'
+          Values:
+            - '/wp-admin/*'
+            - '/wp-login.php'
+            - '/xmlrpc.php'
+      Actions:
+        - Type: 'fixed-response'
+          FixedResponseConfig:
+            StatusCode: '403'
+
+  WordPressHttpRule:
+    Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
+    Properties:
+      ListenerArn: !Ref 'ListenerHttpArn'
+      Priority: 100
       Conditions:
         - Field: 'host-header'
           HostHeaderConfig:
@@ -424,12 +463,12 @@ Resources:
         - Type: 'forward'
           TargetGroupArn: !Ref 'TargetGroup'
 
-  ListenerHttpsRule:
+  WordPressHttpsRule:
     Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
     Condition: HasHttpsListener
     Properties:
       ListenerArn: !Ref 'ListenerHttpsArn'
-      Priority: 10
+      Priority: 100
       Conditions:
         - Field: 'host-header'
           HostHeaderConfig:
