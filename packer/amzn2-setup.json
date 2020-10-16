@@ -1,0 +1,70 @@
+{
+  "variables": {
+    "aws_access_key": "",
+    "aws_secret_key": "",
+    "basename": "wordpress",
+    "environment": "Pro",
+    "subnet": "Public Subnet A",
+    "timezone": "Europe/Madrid"
+  },
+  "builders": [
+    {
+      "type": "amazon-ebs",
+      "access_key": "{{user `aws_access_key`}}",
+      "secret_key": "{{user `aws_secret_key`}}",
+      "region": "eu-west-1",
+      "instance_type": "t2.micro",
+      "ssh_username": "ec2-user",
+      "source_ami_filter": {
+        "filters": {
+          "virtualization-type": "hvm",
+          "name": "amzn2-ami-ecs-*-x86_64-*",
+          "root-device-type": "ebs"
+        },
+        "owners": ["591542846629"],
+        "most_recent": true
+      },
+      "vpc_filter": {
+        "filters": {
+          "tag:Name": "{{user `basename`}}"
+        }
+      },
+      "subnet_filter": {
+        "filters": {
+          "tag:Name": "{{user `subnet`}}"
+        }
+      },
+      "ami_name": "{{user `basename`}}-docker {{timestamp}}",
+      "tags": {
+        "Name": "{{user `basename`}}-docker {{timestamp}}",
+        "Env": "{{user `environment`}}"
+      },
+      "snapshot_tags": {
+        "Name": "{{user `basename`}}-docker {{timestamp}}",
+        "Env": "{{user `environment`}}"
+      }
+    }
+  ],
+  "provisioners": [
+    {
+      "type": "shell",
+      "script": "./amzn2-setup.sh",
+      "environment_vars": [ "TIMEZONE={{user `timezone`}}" ],
+      "execute_command": "sudo sh -c '{{ .Vars }} {{ .Path }}'"
+    },
+    {
+      "type": "file",
+      "source": "./key.pub",
+      "destination": "/home/ec2-user/.ssh/authorized_keys"
+    },
+    {
+      "type": "file",
+      "source": "scripts",
+      "destination": "/home/ec2-user"
+    },
+    {
+      "type": "shell",
+      "inline": "sudo /bin/sh -c 'mv /home/ec2-user/scripts /data && chown -R root.root /data'"
+    }
+  ]
+}
