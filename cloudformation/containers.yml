@@ -1,6 +1,6 @@
 ---
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'AWS WordPress ECS/Fargate'
+Description: 'AWS WordPress ECS/EC2'
 
 Metadata:
 
@@ -21,11 +21,17 @@ Metadata:
         Parameters:
           - 'LoadBalancerEndpoint'
           - 'LoadBalancerHostedZoneId'
+          - 'LoadBalancerSG'
           - 'ListenerHttpArn'
           - 'ListenerHttpsArn'
-          - 'LoadBalancerSG'
           - 'WordPressDnsName'
           - 'WordPressHostedZone'
+      - Label:
+          default: 'AutoScaling configuration'
+        Parameters:
+          - 'ImageId'
+          - 'InstanceType'
+          - 'InstanceCount'
       - Label:
           default: 'Container configuration'
         Parameters:
@@ -45,10 +51,10 @@ Metadata:
           - 'DatabaseWpUser'
           - 'DatabaseWpPassword'
       - Label:
-          default: 'EFS configuration'
+          default: 'Storage configuration'
         Parameters:
-          - 'FileSystemId'
-          - 'FileSystemSG'
+          - 'ContentBucket'
+          - 'BackupBucket'
     ParameterLabels:
       BaseName:
         default: 'Base resource name'
@@ -62,16 +68,22 @@ Metadata:
         default: 'Public DNS endpoint'
       LoadBalancerHostedZoneId:
         default: 'Route53 HostedZone identifier'
+      LoadBalancerSG:
+        default: 'Security group'
       ListenerHttpArn:
         default: 'HTTP listener identifier'
       ListenerHttpsArn:
         default: 'HTTPS listener identifier'
-      LoadBalancerSG:
-        default: 'Security group'
       WordPressDnsName:
         default: 'WordPress DNS domain name'
       WordPressHostedZone:
         default: 'WordPress Route53 hosted zone name'
+      ImageId:
+        default: 'Amazon Machine Image'
+      InstanceType:
+        default: 'Instance type'
+      InstanceCount:
+        default: 'Desired number of EC2 instances'
       SetupImage:
         default: 'WordPress setup container image repository URL'
       WordPressImage:
@@ -96,10 +108,10 @@ Metadata:
         default: 'Database WordPress user'
       DatabaseWpPassword:
         default: 'Database WordPress password'
-      FileSystemId:
-        default: 'FileSystem identifier'
-      FileSystemSG:
-        default: 'FileSystem security group'
+      ContentBucket:
+        default: 'WordPress content S3 bucket'
+      BackupBucket:
+        default: 'WordPress backup S3 bucket'
 
 Parameters:
 
@@ -138,6 +150,11 @@ Parameters:
     Type: 'AWS::SSM::Parameter::Value<String>'
     Default: '/balancer/hostedzone-id'
 
+  LoadBalancerSG:
+    Description: 'AWS SSM Parameter name containing the load balancer security group identifier'
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: '/balancer/security-group'
+
   ListenerHttpArn:
     Description: 'AWS SSM Parameter name containing the load balancer HTTP listener ARN'
     Type: 'AWS::SSM::Parameter::Value<String>'
@@ -148,20 +165,30 @@ Parameters:
     Type: 'AWS::SSM::Parameter::Value<String>'
     Default: '/balancer/listenerhttps-arn'
 
-  LoadBalancerSG:
-    Description: 'AWS SSM Parameter name containing the load balancer security group identifier'
-    Type: 'AWS::SSM::Parameter::Value<String>'
-    Default: '/balancer/security-group'
-
   WordPressDnsName:
     Description: 'Domain name to be used by WordPress'
     Type: 'String'
     Default: 'blog.wordpress.local'
 
   WordPressHostedZone:
-    Description: 'WordPress Route53 HostedZone name'
+    Description: 'Route53 domain name (below which WordPress domain will be registered)'
     Type: 'String'
     Default: ''
+
+  ImageId:
+    Description: 'Amazon Machine Image enabled for ECS'
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/ec2/image-id'
+
+  InstanceType:
+    Description: 'EC2 instance type'
+    Type: 'String'
+    Default: 't3.small'
+
+  InstanceCount:
+    Description: 'Number of EC2 instances to launch'
+    Type: 'Number'
+    Default: 1
 
   SetupImage:
     Description: 'AWS SSM Parameter name containing the WordPress setup Docker image repository'
@@ -223,15 +250,15 @@ Parameters:
     Type: 'AWS::SSM::Parameter::Name'
     Default: '/database/wppassword'
 
-  FileSystemId:
-    Description: 'AWS SSM Parameter name containing the EFS filesystem identifier'
+  ContentBucket:
+    Description: 'AWS SSM Parameter name storing WordPress content S3 bucket'
     Type: 'AWS::SSM::Parameter::Value<String>'
-    Default: '/filesystem/filesystem-id'
+    Default: '/bucket/content'
 
-  FileSystemSG:
-    Description: 'AWS SSM Parameter name containing the EFS filesystem security group identifier'
+  BackupBucket:
+    Description: 'AWS SSM Parameter name storing WordPress backup S3 bucket'
     Type: 'AWS::SSM::Parameter::Value<String>'
-    Default: '/filesystem/security-group'
+    Default: '/bucket/backup'
 
 Conditions:
   HasHttpsListener: !Not [ !Equals [ !Ref 'ListenerHttpArn', !Ref 'ListenerHttpsArn' ] ]
@@ -244,8 +271,8 @@ Resources:
     Properties:
       Family: !Ref 'BaseName'
       RequiresCompatibilities:
-        - 'FARGATE'
-      NetworkMode: 'awsvpc'
+        - 'EC2'
+      NetworkMode: 'bridge'
       Cpu: !Ref 'TaskCpu'
       Memory: !Ref 'TaskMemory'
       ExecutionRoleArn: !GetAtt 'TaskExecutionRole.Arn'
@@ -309,11 +336,8 @@ Resources:
             - ContainerPort: 80
       Volumes:
         - Name: 'content'
-          EFSVolumeConfiguration:
-            FilesystemId: !Ref 'FileSystemId'
-            AuthorizationConfig:
-              AccessPointId: !Ref 'ContentAccessPoint'
-            TransitEncryption: 'ENABLED'
+          Host:
+            SourcePath: '/data/wp-content'
 
   TaskExecutionRole:
     Type: 'AWS::IAM::Role'
@@ -336,7 +360,9 @@ Resources:
               - Effect: 'Allow'
                 Action:
                   - 'ssm:GetParameter*'
-                Resource: '*'
+                Resource:
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${DatabaseMasterPassword}'
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${DatabaseWpPassword}'
       ManagedPolicyArns:
         - 'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy'
       Tags:
@@ -348,21 +374,15 @@ Resources:
   TaskService:
     Type: 'AWS::ECS::Service'
     DependsOn:
+      - 'AutoScalingGroup'
       - 'ListenerHttpRule'
     Properties:
       ServiceName: !Ref 'BaseName'
       Cluster: !Ref 'ContainerCluster'
-      LaunchType: 'FARGATE'
-      PlatformVersion: '1.4.0'
+      LaunchType: 'EC2'
       DesiredCount: !Ref 'TaskCount'
       TaskDefinition: !Ref 'TaskDefinition'
       HealthCheckGracePeriodSeconds: 90
-      NetworkConfiguration:
-        AwsvpcConfiguration:
-          AssignPublicIp: 'ENABLED'
-          SecurityGroups:
-            - !Ref 'ServiceSG'
-          Subnets: !Ref 'Subnets'
       LoadBalancers:
         - ContainerName: 'wordpress-service'
           ContainerPort: 80
@@ -390,30 +410,125 @@ Resources:
       LogGroupName: !Ref 'BaseName'
       RetentionInDays: 365
 
-  ServiceSG:
+  LaunchConfiguration:
+    Type: 'AWS::AutoScaling::LaunchConfiguration'
+    Properties:
+      AssociatePublicIpAddress: true
+      IamInstanceProfile: !Ref 'InstanceProfile'
+      ImageId: !Ref 'ImageId'
+      InstanceType: !Ref 'InstanceType'
+      SecurityGroups:
+        - !Ref 'InstanceSG'
+      BlockDeviceMappings:
+        - DeviceName: '/dev/sda1'
+          Ebs:
+            VolumeSize: 30
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+
+          # Register instance with ECS cluster
+          cat <<'EOF' >> /etc/ecs/ecs.config
+          ECS_CLUSTER=${ContainerCluster}
+          ECS_CONTAINER_INSTANCE_PROPAGATE_TAGS_FROM=ec2_instance
+          EOF
+
+          # Download initial wp-content data / Setup recurrent sync
+          # User 'wordpress' is setup to match WordPress Apache user
+          useradd -s /bin/bash -u 33 wordpress
+          aws s3 sync s3://${ContentBucket}/wp-content/ /data/wp-content/
+          echo "*/5 *   * * *   wordpress    /usr/local/bin/aws s3 sync --delete s3://${ContentBucket}/wp-content/ /data/wp-content/" >> /etc/crontab
+
+          # Setup recurrent content backup job
+          chmod 755 /data/scripts/backup-to-s3.sh &&
+            echo "0 0   * * *   root    /data/scripts/backup-to-s3.sh ${BackupBucket}" >> /etc/crontab
+
+  AutoScalingGroup:
+    Type: 'AWS::AutoScaling::AutoScalingGroup'
+    Properties:
+      Cooldown: '60'
+      DesiredCapacity: !Ref 'InstanceCount'
+      HealthCheckGracePeriod: 30
+      HealthCheckType: 'EC2'
+      LaunchConfigurationName: !Ref 'LaunchConfiguration'
+      MetricsCollection:
+        - Granularity: 1Minute
+      MaxSize: !Ref 'InstanceCount'
+      MinSize: !Ref 'InstanceCount'
+      VPCZoneIdentifier: !Ref 'Subnets'
+      Tags:
+        - Key: 'Name'
+          Value: !Sub '${BaseName}-ecs-instance'
+          PropagateAtLaunch: true
+        - Key: 'Env'
+          Value: !Ref 'Environment'
+          PropagateAtLaunch: true
+
+  InstanceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service:
+                - 'ec2.amazonaws.com'
+            Action:
+              - 'sts:AssumeRole'
+      Policies:
+        - PolicyName: 'AccessPolicy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Action:
+                  - 'ec2:Describe*'
+                Effect: 'Allow'
+                Resource: '*'
+              - Action:
+                  - 's3:ListBucket'
+                Effect: 'Allow'
+                Resource:
+                  - !Sub 'arn:aws:s3:::${ContentBucket}'
+                  - !Sub 'arn:aws:s3:::${BackupBucket}'
+              - Action:
+                  - 's3:Get*'
+                  - 's3:Put*'
+                Effect: 'Allow'
+                Resource:
+                  - !Sub 'arn:aws:s3:::${ContentBucket}/*'
+                  - !Sub 'arn:aws:s3:::${BackupBucket}/*'
+              - Action:
+                  - 's3:DeleteObject*'
+                Effect: 'Allow'
+                Resource:
+                  - !Sub 'arn:aws:s3:::${ContentBucket}/*'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role'
+
+  InstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Path: /
+      Roles:
+        - !Ref 'InstanceRole'
+
+  InstanceSG:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
       GroupDescription: 'Enable access to service'
       VpcId: !Ref 'VpcId'
       SecurityGroupIngress:
         - IpProtocol: 'tcp'
-          FromPort: 80
-          ToPort: 80
+          FromPort: 32768
+          ToPort: 65535
           SourceSecurityGroupId: !Ref 'LoadBalancerSG'
       Tags:
         - Key: 'Name'
           Value: !Sub '${BaseName}-service'
         - Key: 'Env'
           Value: !Ref 'Environment'
-
-  FileSystemIngress:
-    Type: 'AWS::EC2::SecurityGroupIngress'
-    Properties:
-      GroupId: !Ref 'FileSystemSG'
-      IpProtocol: tcp
-      FromPort: 2049
-      ToPort: 2049
-      SourceSecurityGroupId: !Ref 'ServiceSG'
 
   DatabaseIngress:
     Type: 'AWS::EC2::SecurityGroupIngress'
@@ -422,7 +537,7 @@ Resources:
       IpProtocol: tcp
       FromPort: 3306
       ToPort: 3306
-      SourceSecurityGroupId: !Ref 'ServiceSG'
+      SourceSecurityGroupId: !Ref 'InstanceSG'
 
   TargetGroup:
     Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
@@ -431,13 +546,12 @@ Resources:
       Port: 80
       Protocol: 'HTTP'
       VpcId: !Ref 'VpcId'
-      TargetType: 'ip'
       HealthCheckPath: '/'
       HealthCheckProtocol: 'HTTP'
       HealthCheckPort: 'traffic-port'
-      HealthCheckIntervalSeconds: 10
+      HealthCheckIntervalSeconds: 20
       HealthCheckTimeoutSeconds: 5
-      HealthyThresholdCount: 2
+      HealthyThresholdCount: 3
       UnhealthyThresholdCount: 3
       Matcher:
         HttpCode: 200-399
@@ -486,26 +600,10 @@ Resources:
           DNSName: !Ref 'LoadBalancerEndpoint'
           HostedZoneId: !Ref 'LoadBalancerHostedZoneId'
 
-  ContentAccessPoint:
-    Type: 'AWS::EFS::AccessPoint'
-    Properties:
-      FileSystemId: !Ref 'FileSystemId'
-      RootDirectory:
-        Path: '/wp-content'
-        CreationInfo:
-          OwnerUid: '33'
-          OwnerGid: '33'
-          Permissions: '0755'
-      AccessPointTags:
-        - Key: 'Name'
-          Value: !Sub '${BaseName}-content'
-        - Key: 'Env'
-          Value: !Ref 'Environment'
-
 Outputs:
 
-  ServiceSG:
-    Description: 'Service security group'
-    Value: !Ref 'ServiceSG'
+  InstanceSG:
+    Description: 'Instance security group'
+    Value: !Ref 'InstanceSG'
     Export:
-      Name: !Sub '${AWS::StackName}-ServiceSG'
+      Name: !Sub '${AWS::StackName}-InstanceSG'
