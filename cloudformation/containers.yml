@@ -286,6 +286,9 @@ Resources:
               awslogs-group: !Ref 'CloudWatchLogsGroup'
               awslogs-region: !Ref 'AWS::Region'
               awslogs-stream-prefix: 'wordpress-setup'
+          MountPoints:
+            - ContainerPath: '/wp-content'
+              SourceVolume: 'content'
           Environment:
             - Name: 'DB_HOST'
               Value: !Ref 'DatabaseHost'

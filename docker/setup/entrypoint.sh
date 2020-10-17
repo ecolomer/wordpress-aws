@@ -1,6 +1,11 @@
 #!/bin/bash
 set -euo pipefail
 
+echo -e "\nEnsuring correct permissions ..."
+chown -R 33:33 /wp-content
+find /wp-content -type d -exec chmod 0755 {} \;
+find /wp-content -type f -exec chmod 0644 {} \;
+
 echo -e "\nChecking database connectivity ..."
 retries=10
 while [ "$retries" -gt 0 ] && ! mysql -h $DB_HOST -u $DB_USER -p$DB_PASSWORD  -e ";"; do
