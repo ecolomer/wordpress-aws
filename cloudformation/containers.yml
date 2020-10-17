@@ -303,6 +303,7 @@ Resources:
         - Name: 'wordpress-service'
           Essential: true
           Image: !Ref 'WordPressImage'
+          ReadonlyRootFilesystem: true
           DependsOn:
             - Condition: 'SUCCESS'
               ContainerName: 'wordpress-setup'
@@ -315,6 +316,14 @@ Resources:
           MountPoints:
             - ContainerPath: '/var/www/html/wp-content'
               SourceVolume: 'content'
+          LinuxParameters:
+            Tmpfs:
+              - ContainerPath: '/run/lock/apache2'
+                Size: 5
+              - ContainerPath: '/run/apache2'
+                Size: 5
+              - ContainerPath: '/tmp'
+                Size: 128
           Environment:
             - Name: 'WORDPRESS_DB_HOST'
               Value: !Ref 'DatabaseHost'
