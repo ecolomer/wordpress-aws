@@ -21,11 +21,19 @@ fi
 echo -e "\nChecking if database exists ..."
 if ! mysql -h $DB_HOST -u $DB_USER -p$DB_PASSWORD -e "use $WP_DATABASE;" > /dev/null 2>&1; then
   echo "Database does not exist. Creating ..."
+  mysql -h $DB_HOST -u $DB_USER -p$DB_PASSWORD -e "CREATE DATABASE $WP_DATABASE;"
+else
+  echo -e "\nDatabase exists. Skipping ..."
+fi
+
+echo -e "\nChecking if WordPress user exists ..."
+result=$(mysql -h $DB_HOST -u $DB_USER -p$DB_PASSWORD -sse "SELECT 1 FROM mysql.user WHERE user = '$WP_USER';")
+if [ "$result" != "1" ]; then
+  echo "User does not exist. Creating ..."
   mysql -h $DB_HOST -u $DB_USER -p$DB_PASSWORD <<-EOF
-  CREATE DATABASE $WP_DATABASE;
   GRANT ALL PRIVILEGES ON $WP_DATABASE.* TO "$WP_USER"@"%" IDENTIFIED BY "$WP_PASSWORD";
   FLUSH PRIVILEGES;
 EOF
 else
-  echo -e "\nDatabase exists. Skipping ..."
+  echo -e "\nUser exists. Skipping ..."
 fi
