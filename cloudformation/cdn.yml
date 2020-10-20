@@ -18,7 +18,7 @@ Metadata:
           - 'WordPressBucketDns'
           - 'WordPressBucketArn'
           - 'WordPressBucketName'
-          - 'WordPressDnsName'
+          - 'WordPressDnsNames'
           - 'Certificate'
     ParameterLabels:
       BaseName:
@@ -33,8 +33,8 @@ Metadata:
         default: 'WordPress content S3 bucket ARN'
       WordPressBucketName:
         default: 'WordPress content S3 bucket name'
-      WordPressDnsName:
-        default: 'WordPress DNS domain name'
+      WordPressDnsNames:
+        default: 'WordPress DNS domain names'
       Certificate:
         default: 'TLS Certificate'
 
@@ -75,10 +75,10 @@ Parameters:
     Type: 'AWS::SSM::Parameter::Value<String>'
     Default: '/s3bucket-name'
 
-  WordPressDnsName:
-    Description: 'Domain name to be used by WordPress'
-    Type: 'String'
-    Default: 'blog.wordpress.local'
+  WordPressDnsNames:
+    Description: 'Domain names to be used by WordPress'
+    Type: 'AWS::SSM::Parameter::Value<List<String>>'
+    Default: '/wordpress/domain-names'
 
   Certificate:
     Description: 'AWS SSM Parameter name storing the TLS certificate ARN (certificate must be stored in ACM in the us-east-1 region)'
@@ -93,8 +93,7 @@ Resources:
       DistributionConfig:
         Enabled: true
         Comment: 'WordPress service'
-        Aliases:
-          - !Ref 'WordPressDnsName'
+        Aliases: !Ref 'WordPressDnsNames'
         ViewerCertificate:
           AcmCertificateArn: !Ref 'Certificate'
           MinimumProtocolVersion: 'TLSv1'

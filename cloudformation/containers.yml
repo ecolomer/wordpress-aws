@@ -11,6 +11,7 @@ Metadata:
         Parameters:
           - 'BaseName'
           - 'Environment'
+          - 'WordPressDnsName'
       - Label:
           default: 'Network configuration'
         Parameters:
@@ -24,7 +25,7 @@ Metadata:
           - 'LoadBalancerSG'
           - 'ListenerHttpArn'
           - 'ListenerHttpsArn'
-          - 'WordPressDnsName'
+          - 'LoadBalancerDnsNames'
           - 'WordPressHostedZone'
       - Label:
           default: 'AutoScaling configuration'
@@ -60,6 +61,8 @@ Metadata:
         default: 'Base resource name'
       Environment:
         default: 'Environment'
+      WordPressDnsName:
+        default: 'WordPress primary domain name'
       VpcId:
         default: 'VPC Identifier'
       Subnets:
@@ -74,8 +77,8 @@ Metadata:
         default: 'HTTP listener identifier'
       ListenerHttpsArn:
         default: 'HTTPS listener identifier'
-      WordPressDnsName:
-        default: 'WordPress DNS domain name'
+      LoadBalancerDnsNames:
+        default: 'WordPress DNS domain names'
       WordPressHostedZone:
         default: 'WordPress Route53 hosted zone name'
       ImageId:
@@ -130,6 +133,11 @@ Parameters:
       - 'Pre'
     Default: 'Pro'
 
+  WordPressDnsName:
+    Description: 'Domain name to be used by WordPress'
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: '/wordpress/primary-domain'
+
   VpcId:
     Description: 'AWS SSM Parameter name storing the VPC identifier'
     Type: 'AWS::SSM::Parameter::Value<AWS::EC2::VPC::Id>'
@@ -165,10 +173,10 @@ Parameters:
     Type: 'AWS::SSM::Parameter::Value<String>'
     Default: '/balancer/listenerhttps-arn'
 
-  WordPressDnsName:
-    Description: 'Domain name to be used by WordPress'
-    Type: 'String'
-    Default: 'blog.wordpress.local'
+  LoadBalancerDnsNames:
+    Description: 'Domain names to register with the load balancer'
+    Type: 'AWS::SSM::Parameter::Value<List<String>>'
+    Default: '/wordpress/domain-names'
 
   WordPressHostedZone:
     Description: 'Route53 domain name (below which WordPress domain will be registered)'
@@ -584,8 +592,8 @@ Resources:
       Priority: 10
       Conditions:
         - Field: 'host-header'
-          Values:
-            - !Ref 'WordPressDnsName'
+          HostHeaderConfig:
+            Values: !Ref 'LoadBalancerDnsNames'
       Actions:
         - Type: 'forward'
           TargetGroupArn: !Ref 'TargetGroup'
@@ -598,8 +606,8 @@ Resources:
       Priority: 10
       Conditions:
         - Field: 'host-header'
-          Values:
-            - !Ref 'WordPressDnsName'
+          HostHeaderConfig:
+            Values: !Ref 'LoadBalancerDnsNames'
       Actions:
         - Type: 'forward'
           TargetGroupArn: !Ref 'TargetGroup'
