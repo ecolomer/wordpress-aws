@@ -13,7 +13,7 @@
 # .history/
 
 # CloudFormation parameter files
-cloudformation/*.json
+# cloudformation/*.json
 
 # cfn-lint config
 .cfnlintrc
