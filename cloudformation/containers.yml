@@ -37,6 +37,9 @@ Metadata:
           default: 'Container configuration'
         Parameters:
           - 'SetupImage'
+          - 'AdminImage'
+          - 'SyncImage'
+          - 'CertBotImage'
           - 'WordPressImage'
           - 'TaskCpu'
           - 'TaskMemory'
@@ -89,6 +92,12 @@ Metadata:
         default: 'Desired number of EC2 instances'
       SetupImage:
         default: 'WordPress setup container image repository URL'
+      AdminImage:
+        default: 'WordPress admin container image repository URL'
+      SyncImage:
+        default: 'WordPress S3 sync container image repository URL'
+      CertBotImage:
+        default: 'LetsEncrypt CertBot container image repository URL'
       WordPressImage:
         default: 'WordPress service container image repository URL'
       TaskCpu:
@@ -203,6 +212,21 @@ Parameters:
     Type: 'AWS::SSM::Parameter::Value<String>'
     Default: '/repository/wordpress-setup'
 
+  AdminImage:
+    Description: 'AWS SSM Parameter name containing the WordPress admin Docker image repository'
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: '/repository/wordpress-admin'
+
+  SyncImage:
+    Description: 'AWS SSM Parameter name containing the S3 sync Docker image repository'
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: '/repository/wordpress-s3sync'
+
+  CertBotImage:
+    Description: 'AWS SSM Parameter name containing the LetsEncrypt CertBot Docker image repository'
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: '/repository/wordpress-certbot'
+
   WordPressImage:
     Description: 'AWS SSM Parameter name containing the WordPress service Docker image repository'
     Type: 'AWS::SSM::Parameter::Value<String>'
@@ -274,10 +298,159 @@ Conditions:
 
 Resources:
 
-  TaskDefinition:
+  AdminTaskDefinition:
     Type: 'AWS::ECS::TaskDefinition'
     Properties:
-      Family: !Ref 'BaseName'
+      Family: !Sub '${BaseName}-admin'
+      RequiresCompatibilities:
+        - 'EC2'
+      NetworkMode: 'awsvpc'
+      Cpu: '512'
+      Memory: '512'
+      ExecutionRoleArn: !GetAtt 'TaskExecutionRole.Arn'
+      ContainerDefinitions:
+        - Name: 'wordpress-setup'
+          Essential: false
+          Image: !Ref 'SetupImage'
+          LogConfiguration:
+            LogDriver: 'awslogs'
+            Options:
+              awslogs-group: !Ref 'CloudWatchLogsGroup'
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: 'wordpress-setup'
+          MountPoints:
+            - ContainerPath: '/wp-content'
+              SourceVolume: 'content'
+          Environment:
+            - Name: 'DB_HOST'
+              Value: !Ref 'DatabaseHost'
+            - Name: 'DB_USER'
+              Value: !Ref 'DatabaseMasterUser'
+            - Name: 'WP_DATABASE'
+              Value: !Ref 'DatabaseName'
+            - Name: 'WP_USER'
+              Value: !Ref 'DatabaseWpUser'
+          Secrets:
+            - Name: 'DB_PASSWORD'
+              ValueFrom: !Ref 'DatabaseMasterPassword'
+            - Name: 'WP_PASSWORD'
+              ValueFrom: !Ref 'DatabaseWpPassword'
+        - Name: 'wordpress-admin'
+          Essential: true
+          Image: !Ref 'AdminImage'
+          ReadonlyRootFilesystem: true
+          DependsOn:
+            - Condition: 'SUCCESS'
+              ContainerName: 'wordpress-setup'
+          LogConfiguration:
+            LogDriver: 'awslogs'
+            Options:
+              awslogs-group: !Ref 'CloudWatchLogsGroup'
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: 'wordpress-admin'
+          MountPoints:
+            - ContainerPath: '/var/www/html/wp-content'
+              SourceVolume: 'content'
+            - ContainerPath: '/etc/apache2/ssl/archive'
+              SourceVolume: 'letsencrypt-archive'
+            - ContainerPath: '/etc/apache2/ssl/live'
+              SourceVolume: 'letsencrypt-live'
+            - ContainerPath: '/etc/apache2/ssl/certs'
+              SourceVolume: 'letsencrypt-certs'
+          LinuxParameters:
+            Tmpfs:
+              - ContainerPath: '/run/lock/apache2'
+                Size: 5
+              - ContainerPath: '/run/apache2'
+                Size: 5
+              - ContainerPath: '/var/cache/mod_pagespeed'
+                Size: 25
+              - ContainerPath: '/var/log/pagespeed'
+                Size: 25
+              - ContainerPath: '/tmp'
+                Size: 128
+          Environment:
+            - Name: 'WORDPRESS_DB_HOST'
+              Value: !Ref 'DatabaseHost'
+            - Name: 'WORDPRESS_DB_NAME'
+              Value: !Ref 'DatabaseName'
+            - Name: 'WORDPRESS_DB_USER'
+              Value: !Ref 'DatabaseWpUser'
+            - Name: 'WORDPRESS_CONFIG_EXTRA'
+              Value: !Sub |
+                  define('WP_HOME', 'https://${WordPressDnsName}');
+                  define('WP_SITEURL', 'https://${WordPressDnsName}');
+                  define('FS_METHOD', 'direct');
+          Secrets:
+            - Name: 'WORDPRESS_DB_PASSWORD'
+              ValueFrom: !Ref 'DatabaseWpPassword'
+          PortMappings:
+            - ContainerPort: 80
+            - ContainerPort: 443
+        - Name: 'wordpress-s3sync'
+          Essential: false
+          Image: !Ref 'SyncImage'
+          LogConfiguration:
+            LogDriver: 'awslogs'
+            Options:
+              awslogs-group: !Ref 'CloudWatchLogsGroup'
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: 'wordpress-s3sync'
+          Command:
+            - !Sub '${ContentBucket}'
+          MountPoints:
+            - ContainerPath: '/data/wp-content'
+              SourceVolume: 'content'
+        - Name: 'wordpress-certbot'
+          Essential: false
+          Image: !Ref 'CertBotImage'
+          LogConfiguration:
+            LogDriver: 'awslogs'
+            Options:
+              awslogs-group: !Ref 'CloudWatchLogsGroup'
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: 'wordpress-certbot'
+          Command:
+            - !Sub '${WordPressDnsName}'
+          MountPoints:
+            - ContainerPath: '/etc/letsencrypt'
+              SourceVolume: 'letsencrypt-etc'
+            - ContainerPath: '/var/lib/letsencrypt'
+              SourceVolume: 'letsencrypt-varlib'
+            - ContainerPath: '/var/log/letsencrypt'
+              SourceVolume: 'letsencrypt-varlog'
+            - ContainerPath: '/data/letsencrypt'
+              SourceVolume: 'letsencrypt-wwwdata'
+      Volumes:
+        - Name: 'content'
+          Host:
+            SourcePath: '/data/wp-content'
+        - Name: 'letsencrypt-archive'
+          Host:
+            SourcePath: '/data/letsencrypt/etc/archive'
+        - Name: 'letsencrypt-live'
+          Host:
+            SourcePath: '/data/letsencrypt/etc/live'
+        - Name: 'letsencrypt-certs'
+          Host:
+            SourcePath: '/data/letsencrypt/etc/certs'
+        - Name: 'letsencrypt-etc'
+          Host:
+            SourcePath: '/data/letsencrypt/etc'
+        - Name: 'letsencrypt-varlib'
+          Host:
+            SourcePath: '/data/letsencrypt/var-lib'
+        - Name: 'letsencrypt-varlog'
+          Host:
+            SourcePath: '/data/letsencrypt/var-log'
+        - Name: 'letsencrypt-wwwdata'
+          Host:
+            SourcePath: '/data/letsencrypt/www-data'
+
+  WordPressTaskDefinition:
+    Type: 'AWS::ECS::TaskDefinition'
+    Properties:
+      Family: !Sub '${BaseName}-service'
       RequiresCompatibilities:
         - 'EC2'
       NetworkMode: 'bridge'
@@ -327,6 +500,8 @@ Resources:
           MountPoints:
             - ContainerPath: '/var/www/html/wp-content'
               SourceVolume: 'content'
+            - ContainerPath: '/var/www/html/.well-known/acme-challenge/'
+              SourceVolume: 'acme-challenge'
           LinuxParameters:
             Tmpfs:
               - ContainerPath: '/run/lock/apache2'
@@ -338,7 +513,7 @@ Resources:
               - ContainerPath: '/var/log/pagespeed'
                 Size: 25
               - ContainerPath: '/tmp'
-                Size: 128
+                Size: 200
           Environment:
             - Name: 'WORDPRESS_DB_HOST'
               Value: !Ref 'DatabaseHost'
@@ -362,6 +537,9 @@ Resources:
         - Name: 'content'
           Host:
             SourcePath: '/data/wp-content'
+        - Name: 'acme-challenge'
+          Host:
+            SourcePath: '/data/letsencrypt/www-data/.well-known/acme-challenge/'
 
   TaskExecutionRole:
     Type: 'AWS::IAM::Role'
@@ -395,17 +573,39 @@ Resources:
         - Key: 'Env'
           Value: !Ref 'Environment'
 
-  TaskService:
+  AdminTaskService:
+    Type: 'AWS::ECS::Service'
+    DependsOn:
+      - 'AutoScalingGroup'
+    Properties:
+      ServiceName: !Sub '${BaseName}-admin'
+      Cluster: !Ref 'ContainerCluster'
+      LaunchType: 'EC2'
+      DesiredCount: 1
+      TaskDefinition: !Ref 'AdminTaskDefinition'
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          SecurityGroups:
+            - !Ref 'AdminSG'
+          Subnets: !Ref 'Subnets'
+      PropagateTags: 'SERVICE'
+      Tags:
+        - Key: 'Name'
+          Value: 'wordpress-admin'
+        - Key: 'Env'
+          Value: !Ref 'Environment'
+
+  WordPressTaskService:
     Type: 'AWS::ECS::Service'
     DependsOn:
       - 'AutoScalingGroup'
       - 'ListenerHttpRule'
     Properties:
-      ServiceName: !Ref 'BaseName'
+      ServiceName: !Sub '${BaseName}-service'
       Cluster: !Ref 'ContainerCluster'
       LaunchType: 'EC2'
       DesiredCount: !Ref 'TaskCount'
-      TaskDefinition: !Ref 'TaskDefinition'
+      TaskDefinition: !Ref 'WordPressTaskDefinition'
       HealthCheckGracePeriodSeconds: 90
       LoadBalancers:
         - ContainerName: 'wordpress-service'
@@ -414,7 +614,7 @@ Resources:
       PropagateTags: 'SERVICE'
       Tags:
         - Key: 'Name'
-          Value: !Ref 'BaseName'
+          Value: !Sub '${BaseName}-service'
         - Key: 'Env'
           Value: !Ref 'Environment'
 
@@ -554,7 +754,27 @@ Resources:
         - Key: 'Env'
           Value: !Ref 'Environment'
 
-  DatabaseIngress:
+  AdminSG:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: 'Enable access to admin application'
+      VpcId: !Ref 'VpcId'
+      SecurityGroupIngress:
+        - IpProtocol: 'tcp'
+          FromPort: 80
+          ToPort: 80
+          CidrIp: '0.0.0.0/0'
+        - IpProtocol: 'tcp'
+          FromPort: 443
+          ToPort: 443
+          CidrIp: '0.0.0.0/0'
+      Tags:
+        - Key: 'Name'
+          Value: !Sub '${BaseName}-admin'
+        - Key: 'Env'
+          Value: !Ref 'Environment'
+
+  InstanceDatabaseIngress:
     Type: 'AWS::EC2::SecurityGroupIngress'
     Properties:
       GroupId: !Ref 'DatabaseSG'
@@ -562,6 +782,15 @@ Resources:
       FromPort: 3306
       ToPort: 3306
       SourceSecurityGroupId: !Ref 'InstanceSG'
+
+  AdminDatabaseIngress:
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Properties:
+      GroupId: !Ref 'DatabaseSG'
+      IpProtocol: tcp
+      FromPort: 3306
+      ToPort: 3306
+      SourceSecurityGroupId: !Ref 'AdminSG'
 
   TargetGroup:
     Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
