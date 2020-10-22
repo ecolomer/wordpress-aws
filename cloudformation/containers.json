@@ -1,0 +1,140 @@
+{
+  "StackName": "WordPressECS",
+  "Parameters": [
+    {
+      "ParameterKey": "DatabaseHost",
+      "ParameterValue": "/wordpress/database/writer-endpoint"
+    },
+    {
+      "ParameterKey": "ListenerHttpArn",
+      "ParameterValue": "/wordpress/alb/listenerhttp-arn"
+    },
+    {
+      "ParameterKey": "DatabaseSG",
+      "ParameterValue": "/wordpress/database/security-group"
+    },
+    {
+      "ParameterKey": "WordPressDnsName",
+      "ParameterValue": "/wordpress/primary-domain"
+    },
+    {
+      "ParameterKey": "WordPressHostedZone",
+      "ParameterValue": ""
+    },
+    {
+      "ParameterKey": "BaseName",
+      "ParameterValue": "wordpress"
+    },
+    {
+      "ParameterKey": "DatabaseName",
+      "ParameterValue": "/wordpress/database/wpdatabase"
+    },
+    {
+      "ParameterKey": "ImageId",
+      "ParameterValue": "/wordpress/ec2/image-id"
+    },
+    {
+      "ParameterKey": "InstanceType",
+      "ParameterValue": "t3a.small"
+    },
+    {
+      "ParameterKey": "InstanceCount",
+      "ParameterValue": "1"
+    },
+    {
+      "ParameterKey": "TaskCount",
+      "ParameterValue": "1"
+    },
+    {
+      "ParameterKey": "LoadBalancerEndpoint",
+      "ParameterValue": "/wordpress/alb/dns-endpoint"
+    },
+    {
+      "ParameterKey": "LoadBalancerHostedZoneId",
+      "ParameterValue": "/wordpress/alb/hostedzone-id"
+    },
+    {
+      "ParameterKey": "LoadBalancerSG",
+      "ParameterValue": "/wordpress/alb/security-group"
+    },
+    {
+      "ParameterKey": "LoadBalancerDnsNames",
+      "ParameterValue": "/wordpress/domain-names"
+    },
+    {
+      "ParameterKey": "InstanceSubnets",
+      "ParameterValue": "/wordpress/network/subnets/public/id"
+    },
+    {
+      "ParameterKey": "AdminSubnets",
+      "ParameterValue": "/wordpress/network/subnets/private/id"
+    },
+    {
+      "ParameterKey": "ListenerHttpsArn",
+      "ParameterValue": "/wordpress/alb/listenerhttps-arn"
+    },
+    {
+      "ParameterKey": "VpcId",
+      "ParameterValue": "/wordpress/network/vpc-id"
+    },
+    {
+      "ParameterKey": "SetupImage",
+      "ParameterValue": "/wordpress/repository/wordpress-setup"
+    },
+    {
+      "ParameterKey": "WordPressImage",
+      "ParameterValue": "/wordpress/repository/wordpress-service"
+    },
+    {
+      "ParameterKey": "AdminImage",
+      "ParameterValue": "/wordpress/repository/wordpress-admin"
+    },
+    {
+      "ParameterKey": "SyncImage",
+      "ParameterValue": "/wordpress/repository/wordpress-s3sync"
+    },
+    {
+      "ParameterKey": "CertBotImage",
+      "ParameterValue": "/wordpress/repository/wordpress-certbot"
+    },
+    {
+      "ParameterKey": "TaskCpu",
+      "ParameterValue": "256"
+    },
+    {
+      "ParameterKey": "TaskMemory",
+      "ParameterValue": "512"
+    },
+    {
+      "ParameterKey": "DatabaseMasterUser",
+      "ParameterValue": "/wordpress/database/masteruser"
+    },
+    {
+      "ParameterKey": "DatabaseMasterPassword",
+      "ParameterValue": "/wordpress/database/masterpassword"
+    },
+    {
+      "ParameterKey": "DatabaseWpPassword",
+      "ParameterValue": "/wordpress/database/wppassword"
+    },
+    {
+      "ParameterKey": "Environment",
+      "ParameterValue": "Pro"
+    },
+    {
+      "ParameterKey": "DatabaseWpUser",
+      "ParameterValue": "/wordpress/database/wpuser"
+    },
+    {
+      "ParameterKey": "ContentBucket",
+      "ParameterValue": "/wordpress/s3/content-bucket-name"
+    },
+    {
+      "ParameterKey": "BackupBucket",
+      "ParameterValue": "/wordpress/s3/backup-bucket-name"
+    }
+  ],
+  "Capabilities": [
+    "CAPABILITY_IAM"
+  ]
+}
