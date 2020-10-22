@@ -16,7 +16,6 @@ Metadata:
           default: 'Network configuration'
         Parameters:
           - 'VpcId'
-          - 'Subnets'
       - Label:
           default: 'Load Balancer configuration'
         Parameters:
@@ -33,6 +32,7 @@ Metadata:
           - 'ImageId'
           - 'InstanceType'
           - 'InstanceCount'
+          - 'InstanceSubnets'
       - Label:
           default: 'Container configuration'
         Parameters:
@@ -44,6 +44,7 @@ Metadata:
           - 'TaskCpu'
           - 'TaskMemory'
           - 'TaskCount'
+          - 'AdminSubnets'
       - Label:
           default: 'Database configuration'
         Parameters:
@@ -68,8 +69,6 @@ Metadata:
         default: 'WordPress primary domain name'
       VpcId:
         default: 'VPC Identifier'
-      Subnets:
-        default: 'VPC Subnets'
       LoadBalancerEndpoint:
         default: 'Public DNS endpoint'
       LoadBalancerHostedZoneId:
@@ -90,6 +89,8 @@ Metadata:
         default: 'Instance type'
       InstanceCount:
         default: 'Desired number of EC2 instances'
+      InstanceSubnets:
+        default: 'Subnets'
       SetupImage:
         default: 'WordPress setup container image repository URL'
       AdminImage:
@@ -106,6 +107,8 @@ Metadata:
         default: 'Container memory'
       TaskCount:
         default: 'Desired task count'
+      AdminSubnets:
+        default: 'WordPress admin task subnets'
       DatabaseHost:
         default: 'Database host'
       DatabaseSG:
@@ -151,11 +154,6 @@ Parameters:
     Description: 'AWS SSM Parameter name storing the VPC identifier'
     Type: 'AWS::SSM::Parameter::Value<AWS::EC2::VPC::Id>'
     Default: '/network/vpc-id'
-
-  Subnets:
-    Description: 'AWS SSM Parameter name storing subnets for ECS containers'
-    Type: 'AWS::SSM::Parameter::Value<List<AWS::EC2::Subnet::Id>>'
-    Default: '/network/subnets'
 
   LoadBalancerEndpoint:
     Description: 'AWS SSM Parameter name containing the load balancer DNS endpoint'
@@ -207,6 +205,11 @@ Parameters:
     Type: 'Number'
     Default: 1
 
+  InstanceSubnets:
+    Description: 'AWS SSM Parameter name storing subnets for autoscaling group'
+    Type: 'AWS::SSM::Parameter::Value<List<AWS::EC2::Subnet::Id>>'
+    Default: '/network/subnets'
+
   SetupImage:
     Description: 'AWS SSM Parameter name containing the WordPress setup Docker image repository'
     Type: 'AWS::SSM::Parameter::Value<String>'
@@ -246,6 +249,11 @@ Parameters:
     Description: 'Copies of the service to run'
     Type: 'Number'
     Default: 1
+
+  AdminSubnets:
+    Description: 'AWS SSM Parameter name storing subnets for the WordPress admin ECS task'
+    Type: 'AWS::SSM::Parameter::Value<List<AWS::EC2::Subnet::Id>>'
+    Default: '/network/subnets'
 
   DatabaseHost:
     Description: 'AWS SSM Parameter name containing the database writer endpoint for the WordPress service'
@@ -587,7 +595,7 @@ Resources:
         AwsvpcConfiguration:
           SecurityGroups:
             - !Ref 'AdminSG'
-          Subnets: !Ref 'Subnets'
+          Subnets: !Ref 'AdminSubnets'
       PropagateTags: 'SERVICE'
       Tags:
         - Key: 'Name'
@@ -679,7 +687,7 @@ Resources:
         - Granularity: 1Minute
       MaxSize: !Ref 'InstanceCount'
       MinSize: !Ref 'InstanceCount'
-      VPCZoneIdentifier: !Ref 'Subnets'
+      VPCZoneIdentifier: !Ref 'InstanceSubnets'
       Tags:
         - Key: 'Name'
           Value: !Sub '${BaseName}-ecs-instance'
