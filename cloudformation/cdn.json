@@ -1,0 +1,37 @@
+{
+  "StackName": "WordPressCDN",
+  "Parameters": [
+    {
+      "ParameterKey": "BaseName",
+      "ParameterValue": "wordpress"
+    },
+    {
+      "ParameterKey": "Environment",
+      "ParameterValue": "Pro"
+    },
+    {
+      "ParameterKey": "WordPressBucketDns",
+      "ParameterValue": "/wordpress/s3/content-bucket-dns"
+    },
+    {
+      "ParameterKey": "WordPressBucketArn",
+      "ParameterValue": "/wordpress/s3/content-bucket-arn"
+    },
+    {
+      "ParameterKey": "WordPressBucketName",
+      "ParameterValue": "/wordpress/s3/content-bucket-name"
+    },
+    {
+      "ParameterKey": "WordPressBalancer",
+      "ParameterValue": "/wordpress/alb/public-dns-endpoint"
+    },
+    {
+      "ParameterKey": "WordPressDnsNames",
+      "ParameterValue": "/wordpress/domain-names"
+    },
+    {
+      "ParameterKey": "Certificate",
+      "ParameterValue": "/wordpress/cdn/certificate"
+    }
+  ]
+}

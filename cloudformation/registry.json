@@ -1,0 +1,17 @@
+{
+  "StackName": "WordPressECR",
+  "Parameters": [
+    {
+      "ParameterKey": "BaseName",
+      "ParameterValue": "wordpress"
+    },
+    {
+      "ParameterKey": "Environment",
+      "ParameterValue": "Pro"
+    },
+    {
+      "ParameterKey": "SsmKeyPrefix",
+      "ParameterValue": "/wordpress/repository"
+    }
+  ]
+}
