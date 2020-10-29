@@ -47,6 +47,17 @@ Parameters:
 
 Resources:
 
+  WordPressAdmin:
+    Type: 'AWS::ECR::Repository'
+    Properties:
+      RepositoryName: !Sub '${BaseName}-admin'
+      ImageTagMutability: 'MUTABLE'
+      Tags:
+        - Key: 'Name'
+          Value: !Sub '${BaseName}-admin'
+        - Key: 'Env'
+          Value: !Ref 'Environment'
+
   WordPressService:
     Type: 'AWS::ECR::Repository'
     Properties:
@@ -57,6 +68,17 @@ Resources:
           Value: !Sub '${BaseName}-service'
         - Key: 'Env'
           Value: !Ref 'Environment'
+
+  SsmWordPressAdmin:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '${SsmKeyPrefix}/wordpress-admin'
+      Type: String
+      Value: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${WordPressAdmin}'
+      Description: !Sub '${AWS::StackName} - Admin Repository'
+      Tags:
+        Name: !Sub '${BaseName}-admin'
+        Env: !Ref 'Environment'
 
   SsmWordPressService:
     Type: AWS::SSM::Parameter
@@ -71,6 +93,12 @@ Resources:
 
 
 Outputs:
+
+  WordPressAdmin:
+    Description: 'WordPress Admin repository URI'
+    Value: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${WordPressAdmin}'
+    Export:
+      Name: !Sub '${AWS::StackName}-WordPressAdmin'
 
   WordPressService:
     Description: 'WordPress Service repository URI'

@@ -22,9 +22,12 @@ Metadata:
         Parameters:
           - 'LoadBalancerEndpoint'
           - 'LoadBalancerHostedZoneId'
-          - 'LoadBalancerSG'
-          - 'ListenerHttpArn'
-          - 'ListenerHttpsArn'
+          - 'PublicLoadBalancerSG'
+          - 'PrivateLoadBalancerSG'
+          - 'PublicListenerHttpArn'
+          - 'PublicListenerHttpsArn'
+          - 'PrivateListenerHttpArn'
+          - 'PrivateListenerHttpsArn'
           - 'LoadBalancerDnsNames'
           - 'WordPressHostedZone'
       - Label:
@@ -33,6 +36,7 @@ Metadata:
           - 'ImageId'
           - 'InstanceType'
           - 'DesiredCount'
+          - 'AdminImage'
           - 'WordPressImage'
       - Label:
           default: 'Database configuration'
@@ -62,12 +66,18 @@ Metadata:
         default: 'Public DNS endpoint'
       LoadBalancerHostedZoneId:
         default: 'Route53 HostedZone identifier'
-      LoadBalancerSG:
-        default: 'Security group'
-      ListenerHttpArn:
-        default: 'HTTP listener identifier'
-      ListenerHttpsArn:
-        default: 'HTTPS listener identifier'
+      PublicLoadBalancerSG:
+        default: 'Public security group'
+      PrivateLoadBalancerSG:
+        default: 'Private security group'
+      PublicListenerHttpArn:
+        default: 'Public HTTP listener identifier'
+      PublicListenerHttpsArn:
+        default: 'Public HTTPS listener identifier'
+      PrivateListenerHttpArn:
+        default: 'Private HTTP listener identifier'
+      PrivateListenerHttpsArn:
+        default: 'Private HTTPS listener identifier'
       LoadBalancerDnsNames:
         default: 'WordPress DNS domain names'
       WordPressHostedZone:
@@ -78,6 +88,8 @@ Metadata:
         default: 'Instance type'
       DesiredCount:
         default: 'Desired number of instances'
+      AdminImage:
+        default: 'WordPress admin container image repository'
       WordPressImage:
         default: 'WordPress service container image repository'
       DatabaseHost:
@@ -128,29 +140,44 @@ Parameters:
     Default: '/network/subnets'
 
   LoadBalancerEndpoint:
-    Description: 'AWS SSM Parameter name containing the load balancer DNS endpoint'
+    Description: 'AWS SSM Parameter name containing the public load balancer DNS endpoint'
     Type: 'AWS::SSM::Parameter::Value<String>'
-    Default: '/balancer/dns-endpoint'
+    Default: '/balancer/public-dns-endpoint'
 
   LoadBalancerHostedZoneId:
-    Description: 'AWS SSM Parameter name containing the load balancer Route53 hosted zone identifier'
+    Description: 'AWS SSM Parameter name containing the public load balancer Route53 hosted zone identifier'
     Type: 'AWS::SSM::Parameter::Value<String>'
-    Default: '/balancer/hostedzone-id'
+    Default: '/balancer/public-hostedzone-id'
 
-  LoadBalancerSG:
-    Description: 'AWS SSM Parameter name containing the load balancer security group identifier'
+  PublicLoadBalancerSG:
+    Description: 'AWS SSM Parameter name containing the public load balancer security group identifier'
     Type: 'AWS::SSM::Parameter::Value<String>'
-    Default: '/balancer/security-group'
+    Default: '/balancer/public-security-group'
 
-  ListenerHttpArn:
-    Description: 'AWS SSM Parameter name containing the load balancer HTTP listener ARN'
+  PrivateLoadBalancerSG:
+    Description: 'AWS SSM Parameter name containing the private load balancer security group identifier'
     Type: 'AWS::SSM::Parameter::Value<String>'
-    Default: '/balancer/listenerhttp-arn'
+    Default: '/balancer/private-security-group'
 
-  ListenerHttpsArn:
-    Description: 'AWS SSM Parameter name containing the load balancer HTTPS listener ARN'
+  PublicListenerHttpArn:
+    Description: 'AWS SSM Parameter name containing the public load balancer HTTP listener ARN'
     Type: 'AWS::SSM::Parameter::Value<String>'
-    Default: '/balancer/listenerhttps-arn'
+    Default: '/balancer/public-listenerhttp-arn'
+
+  PublicListenerHttpsArn:
+    Description: 'AWS SSM Parameter name containing the public load balancer HTTPS listener ARN'
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: '/balancer/public-listenerhttps-arn'
+
+  PrivateListenerHttpArn:
+    Description: 'AWS SSM Parameter name containing the private load balancer HTTP listener ARN'
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: '/balancer/private-listenerhttp-arn'
+
+  PrivateListenerHttpsArn:
+    Description: 'AWS SSM Parameter name containing the private load balancer HTTPS listener ARN'
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: '/balancer/private-listenerhttps-arn'
 
   LoadBalancerDnsNames:
     Description: 'Domain names to register with the load balancer'
@@ -176,6 +203,11 @@ Parameters:
     Description: 'Number of EC2 instances to launch'
     Type: 'Number'
     Default: 1
+
+  AdminImage:
+    Description: 'AWS SSM Parameter name containing the WordPress admin Docker image repository'
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: '/repository/wordpress-admin'
 
   WordPressImage:
     Description: 'AWS SSM Parameter name containing the WordPress service Docker image repository'
@@ -218,7 +250,7 @@ Parameters:
     Default: '/bucket/backup'
 
 Conditions:
-  HasHttpsListener: !Not [ !Equals [ !Ref 'ListenerHttpArn', !Ref 'ListenerHttpsArn' ] ]
+  HasHttpsListener: !Not [ !Equals [ !Ref 'PublicListenerHttpArn', !Ref 'PublicListenerHttpsArn' ] ]
   HasHostedZone: !Not [ !Equals [ !Ref 'WordPressHostedZone', '' ] ]
 
 Resources:
@@ -241,7 +273,8 @@ Resources:
           #!/bin/bash
 
           # Update docker-compose files with stack parameters
-          sed -i -e 's|<placeholder-image>|${WordPressImage}|' /data/docker/docker-compose.yml
+          sed -i -e 's|<placeholder-image>|${WordPressImage}|' /data/docker/docker-compose.prod.yml
+          sed -i -e 's|<placeholder-image>|${AdminImage}|' /data/docker/docker-compose.admin.yml
 
           # Define WordPress Docker image environment variables
           export WORDPRESS_DB_HOST=${DatabaseHost}
@@ -256,7 +289,10 @@ Resources:
             echo "*/5 *   * * *   root    /data/scripts/sync-to-s3.sh ${ContentBucket}" >> /etc/crontab
 
           # Launch production container
-          docker-compose -f /data/docker/docker-compose.yml -p prod up -d
+          docker-compose -f /data/docker/docker-compose.prod.yml -p prod up -d
+
+          # Launch admin container
+          docker-compose -f /data/docker/docker-compose.admin.yml -p admin up -d
 
           # Setup recurrent content backup job
           chmod 755 /data/scripts/backup-to-s3.sh &&
@@ -276,7 +312,8 @@ Resources:
       MinSize: !Ref 'DesiredCount'
       VPCZoneIdentifier: !Ref 'Subnets'
       TargetGroupARNs:
-        - !Ref 'TargetGroup'
+        - !Ref 'PublicTargetGroup'
+        - !Ref 'PrivateTargetGroup'
       Tags:
         - Key: 'Name'
           Value: !Sub '${BaseName}-instance'
@@ -354,7 +391,11 @@ Resources:
         - IpProtocol: 'tcp'
           FromPort: 80
           ToPort: 80
-          SourceSecurityGroupId: !Ref 'LoadBalancerSG'
+          SourceSecurityGroupId: !Ref 'PublicLoadBalancerSG'
+        - IpProtocol: 'tcp'
+          FromPort: 8080
+          ToPort: 8080
+          SourceSecurityGroupId: !Ref 'PrivateLoadBalancerSG'
       Tags:
         - Key: 'Name'
           Value: !Sub '${BaseName}-service'
@@ -370,10 +411,10 @@ Resources:
       ToPort: 3306
       SourceSecurityGroupId: !Ref 'ServiceSG'
 
-  TargetGroup:
+  PublicTargetGroup:
     Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
     Properties:
-      Name: !Sub '${BaseName}-service'
+      Name: !Sub '${BaseName}-public-service'
       Port: 80
       Protocol: 'HTTP'
       VpcId: !Ref 'VpcId'
@@ -388,14 +429,36 @@ Resources:
         HttpCode: 200-399
       Tags:
         - Key: 'Name'
-          Value: !Sub '${BaseName}-service'
+          Value: !Sub '${BaseName}-publicservice'
         - Key: 'Env'
           Value: !Ref 'Environment'
 
-  ListenerHttpRule:
+  PrivateTargetGroup:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      Name: !Sub '${BaseName}-private-service'
+      Port: 8080
+      Protocol: 'HTTP'
+      VpcId: !Ref 'VpcId'
+      HealthCheckPath: '/'
+      HealthCheckProtocol: 'HTTP'
+      HealthCheckPort: 'traffic-port'
+      HealthCheckIntervalSeconds: 10
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Matcher:
+        HttpCode: 200-399
+      Tags:
+        - Key: 'Name'
+          Value: !Sub '${BaseName}-privateservice'
+        - Key: 'Env'
+          Value: !Ref 'Environment'
+
+  PrivateAdminHttpRule:
     Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
     Properties:
-      ListenerArn: !Ref 'ListenerHttpArn'
+      ListenerArn: !Ref 'PrivateListenerHttpArn'
       Priority: 10
       Conditions:
         - Field: 'host-header'
@@ -403,13 +466,13 @@ Resources:
             Values: !Ref 'LoadBalancerDnsNames'
       Actions:
         - Type: 'forward'
-          TargetGroupArn: !Ref 'TargetGroup'
+          TargetGroupArn: !Ref 'PrivateTargetGroup'
 
-  ListenerHttpsRule:
+  PrivateAdminHttpsRule:
     Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
     Condition: HasHttpsListener
     Properties:
-      ListenerArn: !Ref 'ListenerHttpsArn'
+      ListenerArn: !Ref 'PrivateListenerHttpsArn'
       Priority: 10
       Conditions:
         - Field: 'host-header'
@@ -417,7 +480,34 @@ Resources:
             Values: !Ref 'LoadBalancerDnsNames'
       Actions:
         - Type: 'forward'
-          TargetGroupArn: !Ref 'TargetGroup'
+          TargetGroupArn: !Ref 'PrivateTargetGroup'
+
+  PublicWordPressHttpRule:
+    Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
+    Properties:
+      ListenerArn: !Ref 'PublicListenerHttpArn'
+      Priority: 10
+      Conditions:
+        - Field: 'host-header'
+          HostHeaderConfig:
+            Values: !Ref 'LoadBalancerDnsNames'
+      Actions:
+        - Type: 'forward'
+          TargetGroupArn: !Ref 'PublicTargetGroup'
+
+  PublicWordPressHttpsRule:
+    Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
+    Condition: HasHttpsListener
+    Properties:
+      ListenerArn: !Ref 'PublicListenerHttpsArn'
+      Priority: 10
+      Conditions:
+        - Field: 'host-header'
+          HostHeaderConfig:
+            Values: !Ref 'LoadBalancerDnsNames'
+      Actions:
+        - Type: 'forward'
+          TargetGroupArn: !Ref 'PublicTargetGroup'
 
   DomainRecord:
     Type: 'AWS::Route53::RecordSetGroup'
