@@ -22,9 +22,12 @@ Metadata:
         Parameters:
           - 'LoadBalancerEndpoint'
           - 'LoadBalancerHostedZoneId'
-          - 'LoadBalancerSG'
-          - 'ListenerHttpArn'
-          - 'ListenerHttpsArn'
+          - 'PublicLoadBalancerSG'
+          - 'PrivateLoadBalancerSG'
+          - 'PublicListenerHttpArn'
+          - 'PublicListenerHttpsArn'
+          - 'PrivateListenerHttpArn'
+          - 'PrivateListenerHttpsArn'
           - 'LoadBalancerDnsNames'
           - 'WordPressHostedZone'
       - Label:
@@ -37,6 +40,8 @@ Metadata:
           default: 'Container configuration'
         Parameters:
           - 'SetupImage'
+          - 'AdminImage'
+          - 'SyncImage'
           - 'WordPressImage'
           - 'TaskCpu'
           - 'TaskMemory'
@@ -71,14 +76,20 @@ Metadata:
         default: 'Public DNS endpoint'
       LoadBalancerHostedZoneId:
         default: 'Route53 HostedZone identifier'
-      LoadBalancerSG:
-        default: 'Security group'
-      ListenerHttpArn:
-        default: 'HTTP listener identifier'
-      ListenerHttpsArn:
-        default: 'HTTPS listener identifier'
+      PublicLoadBalancerSG:
+        default: 'Public security group'
+      PrivateLoadBalancerSG:
+        default: 'Private security group'
+      PublicListenerHttpArn:
+        default: 'Public HTTP listener identifier'
+      PublicListenerHttpsArn:
+        default: 'Public HTTPS listener identifier'
+      PrivateListenerHttpArn:
+        default: 'Private HTTP listener identifier'
+      PrivateListenerHttpsArn:
+        default: 'Private HTTPS listener identifier'
       LoadBalancerDnsNames:
-        default: 'WordPress DNS domain names'
+        default: 'WordPress DNS domain name'
       WordPressHostedZone:
         default: 'WordPress Route53 hosted zone name'
       ImageId:
@@ -89,6 +100,10 @@ Metadata:
         default: 'Desired number of EC2 instances'
       SetupImage:
         default: 'WordPress setup container image repository URL'
+      AdminImage:
+        default: 'WordPress admin container image repository'
+      SyncImage:
+        default: 'WordPress S3 sync container image repository URL'
       WordPressImage:
         default: 'WordPress service container image repository URL'
       TaskCpu:
@@ -158,20 +173,35 @@ Parameters:
     Type: 'AWS::SSM::Parameter::Value<String>'
     Default: '/balancer/hostedzone-id'
 
-  LoadBalancerSG:
-    Description: 'AWS SSM Parameter name containing the load balancer security group identifier'
+  PublicLoadBalancerSG:
+    Description: 'AWS SSM Parameter name containing the public load balancer security group identifier'
     Type: 'AWS::SSM::Parameter::Value<String>'
-    Default: '/balancer/security-group'
+    Default: '/balancer/public-security-group'
 
-  ListenerHttpArn:
-    Description: 'AWS SSM Parameter name containing the load balancer HTTP listener ARN'
+  PrivateLoadBalancerSG:
+    Description: 'AWS SSM Parameter name containing the private load balancer security group identifier'
     Type: 'AWS::SSM::Parameter::Value<String>'
-    Default: '/balancer/listenerhttp-arn'
+    Default: '/balancer/private-security-group'
 
-  ListenerHttpsArn:
-    Description: 'AWS SSM Parameter name containing the load balancer HTTPS listener ARN'
+  PublicListenerHttpArn:
+    Description: 'AWS SSM Parameter name containing the public load balancer HTTP listener ARN'
     Type: 'AWS::SSM::Parameter::Value<String>'
-    Default: '/balancer/listenerhttps-arn'
+    Default: '/balancer/public-listenerhttp-arn'
+
+  PublicListenerHttpsArn:
+    Description: 'AWS SSM Parameter name containing the public load balancer HTTPS listener ARN'
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: '/balancer/public-listenerhttps-arn'
+
+  PrivateListenerHttpArn:
+    Description: 'AWS SSM Parameter name containing the private load balancer HTTP listener ARN'
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: '/balancer/private-listenerhttp-arn'
+
+  PrivateListenerHttpsArn:
+    Description: 'AWS SSM Parameter name containing the private load balancer HTTPS listener ARN'
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: '/balancer/private-listenerhttps-arn'
 
   LoadBalancerDnsNames:
     Description: 'Domain names to register with the load balancer'
@@ -202,6 +232,16 @@ Parameters:
     Description: 'AWS SSM Parameter name containing the WordPress setup Docker image repository'
     Type: 'AWS::SSM::Parameter::Value<String>'
     Default: '/repository/wordpress-setup'
+
+  AdminImage:
+    Description: 'AWS SSM Parameter name containing the WordPress admin Docker image repository'
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: '/repository/wordpress-admin'
+
+  SyncImage:
+    Description: 'AWS SSM Parameter name containing the S3 sync Docker image repository'
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: '/repository/wordpress-s3sync'
 
   WordPressImage:
     Description: 'AWS SSM Parameter name containing the WordPress service Docker image repository'
@@ -269,15 +309,118 @@ Parameters:
     Default: '/bucket/backup'
 
 Conditions:
-  HasHttpsListener: !Not [ !Equals [ !Ref 'ListenerHttpArn', !Ref 'ListenerHttpsArn' ] ]
+  HasHttpsListener: !Not [ !Equals [ !Ref 'PublicListenerHttpArn', !Ref 'PublicListenerHttpsArn' ] ]
   HasHostedZone: !Not [ !Equals [ !Ref 'WordPressHostedZone', '' ] ]
 
 Resources:
 
-  TaskDefinition:
+  AdminTaskDefinition:
     Type: 'AWS::ECS::TaskDefinition'
     Properties:
-      Family: !Ref 'BaseName'
+      Family: !Sub '${BaseName}-admin'
+      RequiresCompatibilities:
+        - 'EC2'
+      NetworkMode: 'bridge'
+      Cpu: !Ref 'TaskCpu'
+      Memory: !Ref 'TaskMemory'
+      ExecutionRoleArn: !GetAtt 'TaskExecutionRole.Arn'
+      ContainerDefinitions:
+        - Name: 'wordpress-setup'
+          Essential: false
+          Image: !Ref 'SetupImage'
+          LogConfiguration:
+            LogDriver: 'awslogs'
+            Options:
+              awslogs-group: !Ref 'CloudWatchLogsGroup'
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: 'wordpress-setup'
+          MountPoints:
+            - ContainerPath: '/wp-content'
+              SourceVolume: 'content'
+          Environment:
+            - Name: 'DB_HOST'
+              Value: !Ref 'DatabaseHost'
+            - Name: 'DB_USER'
+              Value: !Ref 'DatabaseMasterUser'
+            - Name: 'WP_DATABASE'
+              Value: !Ref 'DatabaseName'
+            - Name: 'WP_USER'
+              Value: !Ref 'DatabaseWpUser'
+          Secrets:
+            - Name: 'DB_PASSWORD'
+              ValueFrom: !Ref 'DatabaseMasterPassword'
+            - Name: 'WP_PASSWORD'
+              ValueFrom: !Ref 'DatabaseWpPassword'
+        - Name: 'wordpress-admin'
+          Essential: true
+          Image: !Ref 'AdminImage'
+          ReadonlyRootFilesystem: true
+          DependsOn:
+            - Condition: 'SUCCESS'
+              ContainerName: 'wordpress-setup'
+          LogConfiguration:
+            LogDriver: 'awslogs'
+            Options:
+              awslogs-group: !Ref 'CloudWatchLogsGroup'
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: 'wordpress-admin'
+          MountPoints:
+            - ContainerPath: '/var/www/html/wp-content'
+              SourceVolume: 'content'
+          LinuxParameters:
+            Tmpfs:
+              - ContainerPath: '/run/lock/apache2'
+                Size: 5
+              - ContainerPath: '/run/apache2'
+                Size: 5
+              - ContainerPath: '/var/cache/mod_pagespeed'
+                Size: 25
+              - ContainerPath: '/var/log/pagespeed'
+                Size: 25
+              - ContainerPath: '/tmp'
+                Size: 128
+          Environment:
+            - Name: 'WORDPRESS_DB_HOST'
+              Value: !Ref 'DatabaseHost'
+            - Name: 'WORDPRESS_DB_NAME'
+              Value: !Ref 'DatabaseName'
+            - Name: 'WORDPRESS_DB_USER'
+              Value: !Ref 'DatabaseWpUser'
+            - Name: 'WORDPRESS_CONFIG_EXTRA'
+              Value: !Sub
+                - |
+                  define('WP_HOME', '${Scheme}://${WordPressDnsName}');
+                  define('WP_SITEURL', '${Scheme}://${WordPressDnsName}');
+                  define('FS_METHOD', 'direct');
+                - Scheme: !If [ 'HasHttpsListener', 'https', 'http' ]
+          Secrets:
+            - Name: 'WORDPRESS_DB_PASSWORD'
+              ValueFrom: !Ref 'DatabaseWpPassword'
+          PortMappings:
+            - ContainerPort: 80
+        - Name: 'wordpress-s3sync'
+          Essential: false
+          Image: !Ref 'SyncImage'
+          LogConfiguration:
+            LogDriver: 'awslogs'
+            Options:
+              awslogs-group: !Ref 'CloudWatchLogsGroup'
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: 'wordpress-s3sync'
+          Command:
+            - !Sub '${ContentBucket}'
+          MountPoints:
+            - ContainerPath: '/data/wp-content'
+              SourceVolume: 'content'
+      Volumes:
+        - Name: 'content'
+          Host:
+            SourcePath: '/data/wp-content'
+
+  WordPressTaskDefinition:
+    Type: 'AWS::ECS::TaskDefinition'
+    Properties:
+      Family: !Sub '${BaseName}-service'
       RequiresCompatibilities:
         - 'EC2'
       NetworkMode: 'bridge'
@@ -395,26 +538,49 @@ Resources:
         - Key: 'Env'
           Value: !Ref 'Environment'
 
-  TaskService:
+  AdminTaskService:
     Type: 'AWS::ECS::Service'
     DependsOn:
       - 'AutoScalingGroup'
-      - 'ListenerHttpRule'
+      - 'PrivateAdminHttpRule'
     Properties:
-      ServiceName: !Ref 'BaseName'
+      ServiceName: !Sub '${BaseName}-admin'
+      Cluster: !Ref 'ContainerCluster'
+      LaunchType: 'EC2'
+      DesiredCount: 1
+      TaskDefinition: !Ref 'AdminTaskDefinition'
+      HealthCheckGracePeriodSeconds: 90
+      LoadBalancers:
+        - ContainerName: 'wordpress-admin'
+          ContainerPort: 80
+          TargetGroupArn: !Ref 'PrivateTargetGroup'
+      PropagateTags: 'SERVICE'
+      Tags:
+        - Key: 'Name'
+          Value: !Sub '${BaseName}-admin'
+        - Key: 'Env'
+          Value: !Ref 'Environment'
+
+  WordPressTaskService:
+    Type: 'AWS::ECS::Service'
+    DependsOn:
+      - 'AutoScalingGroup'
+      - 'PublicWordPressHttpRule'
+    Properties:
+      ServiceName: !Sub '${BaseName}-service'
       Cluster: !Ref 'ContainerCluster'
       LaunchType: 'EC2'
       DesiredCount: !Ref 'TaskCount'
-      TaskDefinition: !Ref 'TaskDefinition'
+      TaskDefinition: !Ref 'WordPressTaskDefinition'
       HealthCheckGracePeriodSeconds: 90
       LoadBalancers:
         - ContainerName: 'wordpress-service'
           ContainerPort: 80
-          TargetGroupArn: !Ref 'TargetGroup'
+          TargetGroupArn: !Ref 'PublicTargetGroup'
       PropagateTags: 'SERVICE'
       Tags:
         - Key: 'Name'
-          Value: !Ref 'BaseName'
+          Value: !Sub '${BaseName}-service'
         - Key: 'Env'
           Value: !Ref 'Environment'
 
@@ -547,7 +713,11 @@ Resources:
         - IpProtocol: 'tcp'
           FromPort: 32768
           ToPort: 65535
-          SourceSecurityGroupId: !Ref 'LoadBalancerSG'
+          SourceSecurityGroupId: !Ref 'PublicLoadBalancerSG'
+        - IpProtocol: 'tcp'
+          FromPort: 32768
+          ToPort: 65535
+          SourceSecurityGroupId: !Ref 'PrivateLoadBalancerSG'
       Tags:
         - Key: 'Name'
           Value: !Sub '${BaseName}-service'
@@ -563,10 +733,10 @@ Resources:
       ToPort: 3306
       SourceSecurityGroupId: !Ref 'InstanceSG'
 
-  TargetGroup:
+  PublicTargetGroup:
     Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
     Properties:
-      Name: !Sub '${BaseName}-service'
+      Name: !Sub '${BaseName}-public-service'
       Port: 80
       Protocol: 'HTTP'
       VpcId: !Ref 'VpcId'
@@ -581,14 +751,36 @@ Resources:
         HttpCode: 200-399
       Tags:
         - Key: 'Name'
-          Value: !Sub '${BaseName}-service'
+          Value: !Sub '${BaseName}-publicservice'
         - Key: 'Env'
           Value: !Ref 'Environment'
 
-  ListenerHttpRule:
+  PrivateTargetGroup:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      Name: !Sub '${BaseName}-private-service'
+      Port: 80
+      Protocol: 'HTTP'
+      VpcId: !Ref 'VpcId'
+      HealthCheckPath: '/'
+      HealthCheckProtocol: 'HTTP'
+      HealthCheckPort: 'traffic-port'
+      HealthCheckIntervalSeconds: 20
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 3
+      UnhealthyThresholdCount: 3
+      Matcher:
+        HttpCode: 200-399
+      Tags:
+        - Key: 'Name'
+          Value: !Sub '${BaseName}-privateservice'
+        - Key: 'Env'
+          Value: !Ref 'Environment'
+
+  PrivateAdminHttpRule:
     Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
     Properties:
-      ListenerArn: !Ref 'ListenerHttpArn'
+      ListenerArn: !Ref 'PrivateListenerHttpArn'
       Priority: 10
       Conditions:
         - Field: 'host-header'
@@ -596,13 +788,13 @@ Resources:
             Values: !Ref 'LoadBalancerDnsNames'
       Actions:
         - Type: 'forward'
-          TargetGroupArn: !Ref 'TargetGroup'
+          TargetGroupArn: !Ref 'PrivateTargetGroup'
 
-  ListenerHttpsRule:
+  PrivateAdminHttpsRule:
     Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
     Condition: HasHttpsListener
     Properties:
-      ListenerArn: !Ref 'ListenerHttpsArn'
+      ListenerArn: !Ref 'PrivateListenerHttpsArn'
       Priority: 10
       Conditions:
         - Field: 'host-header'
@@ -610,7 +802,34 @@ Resources:
             Values: !Ref 'LoadBalancerDnsNames'
       Actions:
         - Type: 'forward'
-          TargetGroupArn: !Ref 'TargetGroup'
+          TargetGroupArn: !Ref 'PrivateTargetGroup'
+
+  PublicWordPressHttpRule:
+    Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
+    Properties:
+      ListenerArn: !Ref 'PublicListenerHttpArn'
+      Priority: 10
+      Conditions:
+        - Field: 'host-header'
+          HostHeaderConfig:
+            Values: !Ref 'LoadBalancerDnsNames'
+      Actions:
+        - Type: 'forward'
+          TargetGroupArn: !Ref 'PublicTargetGroup'
+
+  PublicWordPressHttpsRule:
+    Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
+    Condition: HasHttpsListener
+    Properties:
+      ListenerArn: !Ref 'PublicListenerHttpsArn'
+      Priority: 10
+      Conditions:
+        - Field: 'host-header'
+          HostHeaderConfig:
+            Values: !Ref 'LoadBalancerDnsNames'
+      Actions:
+        - Type: 'forward'
+          TargetGroupArn: !Ref 'PublicTargetGroup'
 
   DomainRecord:
     Type: 'AWS::Route53::RecordSetGroup'

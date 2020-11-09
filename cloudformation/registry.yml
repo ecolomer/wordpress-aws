@@ -58,6 +58,28 @@ Resources:
         - Key: 'Env'
           Value: !Ref 'Environment'
 
+  WordPressAdmin:
+    Type: 'AWS::ECR::Repository'
+    Properties:
+      RepositoryName: !Sub '${BaseName}-admin'
+      ImageTagMutability: 'MUTABLE'
+      Tags:
+        - Key: 'Name'
+          Value: !Sub '${BaseName}-admin'
+        - Key: 'Env'
+          Value: !Ref 'Environment'
+
+  WordPressS3Sync:
+    Type: 'AWS::ECR::Repository'
+    Properties:
+      RepositoryName: !Sub '${BaseName}-s3sync'
+      ImageTagMutability: 'MUTABLE'
+      Tags:
+        - Key: 'Name'
+          Value: !Sub '${BaseName}-s3sync'
+        - Key: 'Env'
+          Value: !Ref 'Environment'
+
   WordPressService:
     Type: 'AWS::ECR::Repository'
     Properties:
@@ -80,6 +102,28 @@ Resources:
         Name: !Sub '${BaseName}-setup'
         Env: !Ref 'Environment'
 
+  SsmWordPressAdmin:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '${SsmKeyPrefix}/wordpress-admin'
+      Type: String
+      Value: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${WordPressAdmin}'
+      Description: !Sub '${AWS::StackName} - Admin Repository'
+      Tags:
+        Name: !Sub '${BaseName}-admin'
+        Env: !Ref 'Environment'
+
+  SsmWordPressS3Sync:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '${SsmKeyPrefix}/wordpress-s3sync'
+      Type: String
+      Value: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${WordPressS3Sync}'
+      Description: !Sub '${AWS::StackName} - S3 Sync Repository'
+      Tags:
+        Name: !Sub '${BaseName}-s3sync'
+        Env: !Ref 'Environment'
+
   SsmWordPressService:
     Type: AWS::SSM::Parameter
     Properties:
@@ -99,6 +143,18 @@ Outputs:
     Value: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${WordPressSetup}'
     Export:
       Name: !Sub '${AWS::StackName}-WordPressSetup'
+
+  WordPressAdmin:
+    Description: 'WordPress Admin repository URI'
+    Value: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${WordPressAdmin}'
+    Export:
+      Name: !Sub '${AWS::StackName}-WordPressAdmin'
+
+  WordPressS3Sync:
+    Description: 'WordPress S3 Sync repository URI'
+    Value: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${WordPressS3Sync}'
+    Export:
+      Name: !Sub '${AWS::StackName}-WordPressS3Sync'
 
   WordPressService:
     Description: 'WordPress Service repository URI'
