@@ -1,0 +1,17 @@
+{
+  "StackName": "WordPressS3",
+  "Parameters": [
+    {
+      "ParameterKey": "BaseName",
+      "ParameterValue": "wordpress-112233"
+    },
+    {
+      "ParameterKey": "Environment",
+      "ParameterValue": "Pro"
+    },
+    {
+      "ParameterKey": "SsmKeyPrefix",
+      "ParameterValue": "/wordpress/s3"
+    }
+  ]
+}
