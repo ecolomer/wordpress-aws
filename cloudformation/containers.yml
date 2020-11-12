@@ -777,11 +777,50 @@ Resources:
         - Key: 'Env'
           Value: !Ref 'Environment'
 
+  BlockHttpRule:
+    Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
+    Properties:
+      ListenerArn: !Ref 'PublicListenerHttpArn'
+      Priority: 50
+      Conditions:
+        - Field: 'host-header'
+          HostHeaderConfig:
+            Values: !Ref 'LoadBalancerDnsNames'
+        - Field: 'path-pattern'
+          Values:
+            - '/wp-admin/*'
+            - '/wp-login.php'
+            - '/xmlrpc.php'
+      Actions:
+        - Type: 'fixed-response'
+          FixedResponseConfig:
+            StatusCode: '403'
+
+  BlockHttpsRule:
+    Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
+    Condition: HasHttpsListener
+    Properties:
+      ListenerArn: !Ref 'PublicListenerHttpsArn'
+      Priority: 50
+      Conditions:
+        - Field: 'host-header'
+          HostHeaderConfig:
+            Values: !Ref 'LoadBalancerDnsNames'
+        - Field: 'path-pattern'
+          Values:
+            - '/wp-admin/*'
+            - '/wp-login.php'
+            - '/xmlrpc.php'
+      Actions:
+        - Type: 'fixed-response'
+          FixedResponseConfig:
+            StatusCode: '403'
+
   PrivateAdminHttpRule:
     Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
     Properties:
       ListenerArn: !Ref 'PrivateListenerHttpArn'
-      Priority: 10
+      Priority: 100
       Conditions:
         - Field: 'host-header'
           HostHeaderConfig:
@@ -795,7 +834,7 @@ Resources:
     Condition: HasHttpsListener
     Properties:
       ListenerArn: !Ref 'PrivateListenerHttpsArn'
-      Priority: 10
+      Priority: 100
       Conditions:
         - Field: 'host-header'
           HostHeaderConfig:
@@ -808,7 +847,7 @@ Resources:
     Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
     Properties:
       ListenerArn: !Ref 'PublicListenerHttpArn'
-      Priority: 10
+      Priority: 100
       Conditions:
         - Field: 'host-header'
           HostHeaderConfig:
@@ -822,7 +861,7 @@ Resources:
     Condition: HasHttpsListener
     Properties:
       ListenerArn: !Ref 'PublicListenerHttpsArn'
-      Priority: 10
+      Priority: 100
       Conditions:
         - Field: 'host-header'
           HostHeaderConfig:
